@@ -1,0 +1,97 @@
+
+# install and load packages
+
+packs_needed <- c("dagitty")
+
+for (p in packs_needed)
+  if(!require(p, character.only = TRUE)) install.packages(p)
+  library(p, character.only = TRUE)
+
+rm(p)
+rm(packs_needed)
+
+
+# use dagitty to save dependencies between variables
+Dem_Pop <- dagitty('dag {
+  
+  Alcohol <- U1
+  Alcohol <- Health_consciousness
+  Blood_pressure_systolic <- Vascular_deposits
+  Blood_pressure_systolic <- U1
+  Blood_pressure_diastolic <- Blood_pressure_systolic
+  Cognitive_load <- Hearing_impairment
+  Cognitive_reserve <- Cognitive_load
+  Cognitive_reserve <- Education
+  Cognitive_reserve <- Occupation
+  Cognitive_reserve <- Mental_activities
+  Cognitive_reserve <- Premorbid_IQ
+  Dementia <- Neurodegeneration
+  Dementia <- Depression
+  Dementia <- Cognitive_reserve
+  Dementia <- Age
+  Dementia <- U1
+  Dementia <- U2
+  Depression <- Age
+  Depression <- U1
+  Depression <- U2
+  Diabetes <- Healthy_lifestyle
+  Diabetes <- Age
+  Diabetes <- U1
+  Disorder_apartment <- Dementia
+  Disorder_apartment <- Disorder_parental_home
+  Education <- Sex
+  Education <- U1
+  Education <- U3
+  Family_history <- U1
+  Family_history <- U2
+  Handedness
+  Healthy_diet <- Age
+  Healthy_diet <- U1
+  Healthy_diet <- Health_consciousness
+  Healthy_lifestyle <- Physical_activity
+  Healthy_lifestyle <- Healthy_diet
+  Healthy_lifestyle <- Smoking
+  Healthy_lifestyle <- Alcohol
+  Hearing_impairment <- Age
+  Hearing_impairment <- U1
+  Hearing_impairment <- U2
+  Hypertension <- Blood_pressure_systolic
+  Hypertension <- Blood_pressure_diastolic
+  Liking_yellow
+  Loneliness <- Social_engagement
+  Mental_activities <- U3
+  Neurodegeneration <- Hearing_impairment
+  Neurodegeneration <- Social_engagement
+  Neurodegeneration <- Vascular_deposits
+  Neurodegeneration <- Age
+  Neurodegeneration <- U1
+  Neurodegeneration <- U2
+  Occupation <- Sex
+  Occupation <- Education
+  Occupation <- U1
+  Occupation <- U3
+  Physical_activity <- Health_consciousness
+  Physical_activity <- Depression
+  Physical_activity <- Age
+  Physical_activity <- U1
+  Premorbid_IQ <- U3
+  Selection_studies <- Hearing_impairment
+  Selection_studies <- Dementia
+  Time_building <- Selection_studies
+  Sex <- U1
+  Smoking <- Health_consciousness
+  Social_engagement <- Depression
+  Social_engagement <- Speech_hearing
+  Social_engagement <- Age
+  Social_engagement <- U2
+  Speech_hearing <- Hearing_impairment
+  Vascular_deposits <- Healthy_lifestyle
+  Vascular_deposits <- Diabetes
+  Vascular_deposits <- Age
+  Vascular_deposits <- U2
+  
+      
+}')
+
+
+save(Dem_Pop, file = 'Dem_Pop.RData')
