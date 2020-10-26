@@ -1,0 +1,1301 @@
+
+# install and load packages
+
+packs_needed <- c("dplyr", "gtools", "mosaic", "stringr", "SciViews")
+for (p in packs_needed)
+  if(!require(p, character.only = TRUE)) install.packages(p)
+  library(p, character.only = TRUE)
+
+rm(p)
+rm(packs_needed)
+
+
+N <- 10000000 # sample size (population)
+
+# means and standard deviations of the continuous variables
+
+
+# independent variables
+mean_Age <- 48
+sd_Age <- 13
+mean_U1 <- 0
+sd_U1 <- 1
+mean_U2 <- 0
+sd_U2 <- 1
+mean_U3 <- 0
+sd_U3 <- 1
+mean_HC <- 0
+sd_HC <- 1
+
+# children variables
+mean_MA <- 48
+sd_MA <- 9.5
+mean_IQ <- 100
+sd_IQ <- 15
+mean_PA <- 450
+sd_PA <- 100
+mean_Dem <- 3.8
+sd_Dem <- 1
+mean_HD <- 3.8
+sd_HD <- 1
+mean_Dep <- 5.1
+sd_Dep <- 1
+mean_HI <- 33
+sd_HI <- 8
+mean_SH <- 8
+sd_SH <- 1.5
+mean_SE <- 15
+sd_SE <- 5
+mean_CL <- 10
+sd_CL <- 4
+mean_VD <- 0
+sd_VD <- 1
+mean_BPs <- 100
+sd_BPs <- 18
+mean_BPd <- 70
+sd_BPd <- 11
+mean_ND <- 0.0425
+sd_ND <- 0.007
+mean_Edu <- 10
+sd_Edu <- 1
+mean_Occ <- 2
+sd_Occ <- 0.5
+mean_Lon <- 7
+sd_Lon <- 2
+mean_HL <- 0
+sd_HL <- 1
+mean_CR <- 0  
+sd_CR <- 1
+mean_DP <- 2.7
+sd_DP <- 0.7
+mean_DA <- 2.1
+sd_DA <- 0.5
+mean_LY <- 2.5
+sd_LY <- 0.85
+mean_SS <- 30
+sd_SS <- 5
+mean_TB <- 120
+sd_TB <- 40
+
+
+
+# causal influences on continuous variables
+
+C_Age.Dep <- 0.1
+C_U1.Dep <- 0.25
+C_U2.Dep <- 0.07
+
+C_Age.HI <- 0.49
+C_U1.HI <- (-0.14)
+C_U2.HI <- 0.27
+C_HI.SH <- (-0.6)
+
+C_SH.SE <- 0.23
+C_Dep.SE <- -0.13
+C_Age.SE <- -0.15
+C_U2.SE <- -0.08
+
+C_HI.CL <- 0.09
+
+C_U1.PA <- (-0.1)
+C_Dep.PA <- (-0.12)
+C_Age.PA <- (-0.09)
+C_HC.PA <- 0.4
+
+C_U1.HD <- 0.07
+C_Age.HD <- 0.06
+C_HC.HD <- 0.36
+
+
+C_PA.HL <- 0.2
+C_HD.HL <- 0.5
+C_Smo.HL <- (-0.15)
+C_Alc.HL <- (-0.15)
+
+C_Age.VD <- 0.12
+C_Dia.VD <- 0.14
+C_U2.VD <- 0.19
+C_HL.VD <- (-0.21)
+
+C_VD.BP <- 0.4
+C_U1.BP <- (-0.2)
+C_BPs.BPd <- 0.9
+
+C_SE.ND <- -0.14
+C_HI.ND <- 0.33
+C_Age.ND <- 0.13
+C_U1.ND <- 0.08
+C_U2.ND <- 0.11
+C_VD.ND <- 0.33
+
+C_U1.Edu <- (-0.07)
+C_Sex.Edu <- (-0.04)
+C_U3.Edu <- 0.2
+C_U1.Occ <- (-0.1)
+C_U3.Occ <- 0.3
+C_Sex.Occ <- (-0.14)
+C_Edu.Occ <- 0.32
+
+C_U3.MA <- 0.1
+C_U3.IQ <- 0.26
+
+C_Edu.CR <- 0.28
+C_Occ.CR <- 0.33
+C_MA.CR <- 0.31
+C_IQ.CR <- 0.47
+C_CL.CR <- (-0.07)
+
+C_Age.Dem <- 0.34
+C_U1.Dem <- 0.13
+C_U2.Dem <- 0.22
+C_CR.Dem <- (-0.44)
+C_Dep.Dem <- 0.12
+C_ND.Dem <- 0.8
+
+C_SE.Lon <- -0.56
+
+C_DP.DA <- 0.4
+C_Dem.DA <- 0.5
+
+C_HI.SS <- 0.6
+C_Dem.SS <- (-0.8)
+C_SS.TB <- 0.7
+
+
+# probability values for binary outcome variables
+
+# p1_Y: relative frequency of having the outcome Y = 1 without having information about X
+# p1_X.Y: relative frequency of being female given that X = x (nun_) (e.g. 1)
+# nun_X.Y: X value in unit of X; variation from X = 0 which belongs to the probability of
+
+p1_Sex <- 0.55 # relative frequency of being female
+p1_U1.Sex <- 0.75 # relative frequency of being female given that U1 rises one unit (from 0 to 1)
+nun_U1.Sex <- 1 
+
+p1_Alc <- 0.35
+p1_U1.Alc <- 0.29
+nun_U1.Alc <- 1
+p1_HC.Alc <- 0.2
+nun_HC.Alc <- 1
+
+p1_Smo <- 0.3 # relative frequency of having the outcome Smoking = 1 (yes)
+p1_HC.Smo <- 0.15
+nun_HC.Smo <- 1
+
+p1_Dia <- 0.085
+p1_Age.Dia <- 0.092
+nun_Age.Dia <- 10
+p1_U1.Dia <- 0.088
+nun_U1.Dia <- 1
+p1_HL.Dia <- 0.04
+nun_HL.Dia <- 1
+
+p1_FH <- 0.2
+p1_U1.FH <- 0.36
+nun_U1.FH <- 1
+p1_U2.FH <- 0.38
+nun_U2.FH <- 1
+
+p1_Han <- 0.9 # 90% of population are right-handed
+
+# variable values/scales on which they are measured
+
+# > 30 possible values
+values_Age <- c(65:90)
+values_MA <- c(0:100)
+values_IQ <- c(50:150)
+values_HI <- seq(2.5, 45, by = 0.25)
+values_PA <- c(0:900)
+values_SH <- c(0:140)
+values_SE <- c(0:30)
+values_ND <- c(0.025:0.06)
+values_BPs <- c(80:150)
+values_BPd <- c(50:100)
+values_SS <- c(0:90)
+values_TB <- c(0:500)
+
+# < 30 possible values
+values_Edu <- c(0:13)
+values_Occ <- c(1:4)
+values_HD <- c(0:7)
+values_Dem <- c(0:9)
+values_Lon <- c(0:12)
+values_Dep <- c(0:15)
+values_CL <- c(0:24)
+values_DP <- c(1:5)
+values_DA <- c(1:5)
+values_LY <- c(1:5)
+
+
+# binary variables Alcohol, Diabetes, Family history, Hypertension, Sex, Smoking
+values_binary <- c(0,1)
+  
+
+set.seed(32)
+
+# create independent variables
+
+Age <- c()
+inrange <- 1
+while(inrange <= N) {
+  vAge <- round(rnorm(1, mean_Age, sd_Age))
+  if(vAge > 64 & vAge < 90) {
+    Age[inrange] <- vAge
+    inrange <- inrange + 1
+  }
+}
+
+rm(vAge)
+
+Pop_generation <- Age %>% data.frame()
+colnames(Pop_generation)[1] <- "Age"
+
+U1 <- rnorm(N, mean_U1, sd_U1) # first unobservable variable (genetic and environmental factor responsible for corrrelations with sex)
+Pop_generation <- cbind(Pop_generation, U1) # add it to the file containing all variables that were simulated so far
+
+U2 <- rnorm(N, mean_U2, sd_U2) # second unobservable variable (genetic and environmental factor influencing different neurological variables)
+Pop_generation <- cbind(Pop_generation, U2) # add it to the file containing all variables that were simulated so far
+
+U3 <- rnorm(N, mean_U3, sd_U3) # third unobservable variable (genetic and environmental factor influencing IV of CR)
+Pop_generation <- cbind(Pop_generation, U3) # add it to the file containing all variables that were simulated so far
+
+Health_consciousness <- rnorm(N, mean_HC, sd_HC)
+Pop_generation <- cbind(Pop_generation, Health_consciousness) # add it to the file containing all variables that were simulated so far
+
+
+# create dependencies between other variables
+
+# Depression (Dep)
+
+# define currently used values (sd, mean, scale)
+sd <- sd_Dep
+mean <- mean_Dep
+values <- values_Dep
+
+B_Age.Dep <- C_Age.Dep*(sd_Dep/sd(Pop_generation$Age))
+B_U1.Dep <- C_U1.Dep*(sd_Dep/sd(Pop_generation$U1))
+B_U2.Dep <- C_U2.Dep*(sd_Dep/sd(Pop_generation$U2))
+
+working_matrix <- matrix(ncol = 1, nrow = N) # create empty matrix
+
+working_matrix <- round(rnorm(N, mean, sd) + B_Age.Dep*Pop_generation$Age - B_Age.Dep*mean(Pop_generation$Age) + B_U1.Dep*Pop_generation$U1 - B_U1.Dep*mean(Pop_generation$U1) + B_U2.Dep*Pop_generation$U2 - B_U2.Dep*mean(Pop_generation$U2))
+
+# make sure that no values are outside the possible values of the measuring scale 
+for(cutoff in 1:N) {
+  if(working_matrix[cutoff] < min(values)) {
+    working_matrix[cutoff] <- min(values)
+  } else if(working_matrix[cutoff] > max(values)) {
+    working_matrix[cutoff] <- max(values)
+  }
+}
+ 
+Depression <- working_matrix
+
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Depression) # add it to the file containing all variables that were simulated so far
+
+
+# Hearing impairment (HI)
+
+# define currently used values (sd, mean, scale)
+sd <- sd_HI
+mean <- mean_HI
+values <- values_HI
+
+# standardized causal influence in beta values
+B_Age.HI <- C_Age.HI*(sd_HI/sd(Pop_generation$Age))
+B_U1.HI <- C_U1.HI*(sd_HI/sd(Pop_generation$U1))
+B_U2.HI <- C_U2.HI*(sd_HI/sd(Pop_generation$U2))
+
+working_matrix <- matrix(ncol = 1, nrow = N) # create empty matrix
+
+working_matrix <- round(rnorm(N, mean, sd) +  B_Age.HI*Pop_generation$Age - B_Age.HI*mean(Pop_generation$Age) + B_U1.HI*Pop_generation$U1 - B_U1.HI*mean(Pop_generation$U1) + B_U2.HI*Pop_generation$U2 - B_U2.HI*mean(Pop_generation$U2), 2)
+
+# make sure that no values are outside the possible values of the measuring scale 
+for(cutoff in 1:N) {
+  if(working_matrix[cutoff] < min(values)) {
+    working_matrix[cutoff] <- min(values)
+  } 
+}
+ 
+Hearing_impairment <- working_matrix
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Hearing_impairment) # add it to the file containing all variables that were simulated so far
+
+
+# Speech hearing (SH)
+
+
+# define currently used values (sd, mean, scale)
+sd <- sd_SH
+mean <- mean_SH
+values <- values_SH
+
+# standardized causal influence in beta values
+B_HI.SH <- C_HI.SH*(sd_SH/sd(Pop_generation$Hearing_impairment))
+
+working_matrix <- matrix(ncol = 1, nrow = N) # create empty matrix
+
+working_matrix <- round(rnorm(N, mean, sd) +  B_HI.SH*Pop_generation$Hearing_impairment - B_HI.SH*mean(Pop_generation$Hearing_impairment))
+
+# make sure that no values are outside the possible values of the measuring scale 
+for(cutoff in 1:N) {
+  if(working_matrix[cutoff] < min(values)) {
+    working_matrix[cutoff] <- min(values)
+  } else if(working_matrix[cutoff] > max(values)) {
+    working_matrix[cutoff] <- max(values)
+  }
+}
+ 
+Speech_hearing <- working_matrix
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Speech_hearing) # add it to the file containing all variables that were simulated so far
+
+
+# Social engagement (SE)
+
+
+# define currently used values (sd, mean, scale)
+sd <- sd_SE
+mean <- mean_SE
+values <- values_SE
+
+# standardized causal influence in beta values
+B_SH.SE <- C_SH.SE*(sd_SE/sd(Pop_generation$Speech_hearing))
+B_Dep.SE <- C_Dep.SE*(sd_SE/sd(Pop_generation$Depression))
+B_Age.SE <- C_Age.SE*(sd_SE/sd(Pop_generation$Age))
+B_U2.SE <- C_U2.SE*(sd_SE/sd(Pop_generation$U2))
+
+
+working_matrix <- matrix(ncol = 1, nrow = N) # create empty matrix
+
+working_matrix <- round(rnorm(N, mean, sd) +  B_SH.SE*Pop_generation$Speech_hearing - B_SH.SE*mean(Pop_generation$Speech_hearing) + B_Dep.SE*Pop_generation$Depression - B_Dep.SE*mean(Pop_generation$Depression) + B_Age.SE*Pop_generation$Age - B_Age.SE*mean(Pop_generation$Age) + B_U2.SE*Pop_generation$U2 - B_U2.SE*mean(Pop_generation$U2))
+
+# make sure that no values are outside the possible values of the measuring scale 
+for(cutoff in 1:N) {
+  if(working_matrix[cutoff] < min(values)) {
+    working_matrix[cutoff] <- min(values)
+  } else if(working_matrix[cutoff] > max(values)) {
+    working_matrix[cutoff] <- max(values)
+  }
+}
+ 
+Social_engagement <- working_matrix
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Social_engagement) # add it to the file containing all variables that were simulated so far
+
+
+# Cognitive load (CL)
+
+
+# define currently used values (sd, mean, scale)
+sd <- sd_CL
+mean <- mean_CL
+values <- values_CL
+
+# standardized causal influence in beta values
+B_HI.CL <- C_HI.CL*(sd_CL/sd(Pop_generation$Hearing_impairment))
+
+
+working_matrix <- matrix(ncol = 1, nrow = N) # create empty matrix
+
+working_matrix <- round(rnorm(N, mean, sd) +  B_HI.CL*Pop_generation$Hearing_impairment - B_HI.CL*mean(Pop_generation$Hearing_impairment))
+
+# make sure that no values are outside the possible values of the measuring scale 
+for(cutoff in 1:N) {
+  if(working_matrix[cutoff] < min(values)) {
+    working_matrix[cutoff] <- min(values)
+  } else if(working_matrix[cutoff] > max(values)) {
+    working_matrix[cutoff] <- max(values)
+  }
+}
+ 
+Cognitive_load <- working_matrix
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Cognitive_load) # add it to the file containing all variables that were simulated so far
+
+
+# Sex
+# -> binary variable
+
+p1 <- p1_Sex
+B_U1.Sex <-  (logit(p1_U1.Sex)-logit(p1))/nun_U1.Sex # calculate the logistic regression beta value for the influence
+values <- values_binary
+
+
+logit_p1 <- logit(p1)
+
+working_matrix <- matrix(ncol = 1, nrow = N)
+p <- matrix(ncol = 1, nrow = length(values)) # vector for calculating probabilities of different depression values
+
+m_U1 <- mean(Pop_generation$U1) # calculate for further analysis to use and not to calculate each (N) time(s)
+
+# calculating probabilities of the variable values influenced by the variable's parents 
+for (i in 1:N) {
+  
+  X <- exp(logit_p1 + B_U1.Sex*Pop_generation$U1[i] - B_U1.Sex*m_U1)
+  p[2] <- X/(1+X) # probability of being female under the influence of that X value
+  
+  # to avoid negative values, all values lower than 0 are set to zero and 
+  if(p[2] < 0) {
+    p[2] <- 0
+  } else if(p[2] > 1) {
+    p[2] <- 1
+  }
+  
+  p[1] <- 1 - p[2]
+  
+  working_matrix[i] <- sample(values, size = 1, prob = p)
+  if(is.wholenumber(i/10000)) {show(i)}
+}
+
+rm(m_U1)
+
+Sex <- working_matrix
+cbrow <- 1 # used as index for control matrix -> not necessary for the simulation
+control_binary <- matrix(nrow = 1, ncol = 2) %>% data.frame
+colnames(control_binary) <- c("calc", "data")
+control_binary$calc[cbrow] <- logit_p1
+control_binary$data[cbrow] <- glm(formula = Sex ~ Pop_generation$U1, family = binomial)[["coefficients"]][["(Intercept)"]]
+rownames(control_binary)[cbrow] <- "p1_Sex"
+cbrow <- cbrow + 1
+control_binary <- rbind(control_binary, c(rep(NA, 2)))
+control_binary$calc[cbrow] <- B_U1.Sex
+control_binary$data[cbrow] <- glm(formula = Sex ~ Pop_generation$U1, family = binomial)[["coefficients"]][["Pop_generation$U1"]]
+rownames(control_binary)[cbrow] <- "p1_U1.Sex"
+cbrow <- cbrow + 1
+
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Sex) # add it to the file containing all variables that were simulated so far
+
+
+# Physical activity (PA)
+
+
+# define currently used values (sd, mean, scale)
+sd <- sd_PA
+mean <- mean_PA
+values <- values_PA
+
+# standardized causal influence in beta values
+B_U1.PA <- C_U1.PA*(sd_PA/sd(Pop_generation$U1))
+B_Dep.PA <- C_Dep.PA*(sd_PA/sd(Pop_generation$Depression))
+B_Age.PA <- C_Age.PA*(sd_PA/sd(Pop_generation$Age))
+B_HC.PA <- C_HC.PA*(sd_PA/sd(Pop_generation$Health_consciousness))
+
+
+working_matrix <- matrix(ncol = 1, nrow = N) # create empty matrix
+
+working_matrix <- round(rnorm(N, mean, sd) +  B_U1.PA*Pop_generation$U1 - B_U1.PA*mean(Pop_generation$U1) + B_Dep.PA*Pop_generation$Depression - B_Dep.PA*mean(Pop_generation$Depression) + B_Age.PA*Pop_generation$Age - B_Age.PA*mean(Pop_generation$Age) + B_HC.PA*Pop_generation$Health_consciousness - B_HC.PA*mean(Pop_generation$Health_consciousness))
+
+# make sure that no values are outside the possible values of the measuring scale 
+for(cutoff in 1:N) {
+  if(working_matrix[cutoff] < min(values)) {
+    working_matrix[cutoff] <- min(values)
+  } else if(working_matrix[cutoff] > max(values)) {
+    working_matrix[cutoff] <- max(values)
+  }
+}
+ 
+Physical_activity <- working_matrix
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Physical_activity) # add it to the file containing all variables that were simulated so far
+
+
+# Healthy diet (HD)
+
+
+# define currently used values (sd, mean, scale)
+sd <- sd_HD
+mean <- mean_HD
+values <- values_HD
+
+# standardized causal influence in beta values
+B_U1.HD <- C_U1.HD*(sd_HD/sd(Pop_generation$U1))
+B_Age.HD <- C_Age.HD*(sd_HD/sd(Pop_generation$Age))
+B_HC.HD <- C_HC.HD*(sd_HD/sd(Pop_generation$Health_consciousness))
+
+
+working_matrix <- matrix(ncol = 1, nrow = N) # create empty matrix
+
+working_matrix <- round(rnorm(N, mean, sd) +  B_U1.HD*Pop_generation$U1 - B_U1.HD*mean(Pop_generation$U1) + B_Age.HD*Pop_generation$Age - B_Age.HD*mean(Pop_generation$Age) + B_HC.HD*Pop_generation$Health_consciousness - B_HC.HD*mean(Pop_generation$Health_consciousness))
+
+# make sure that no values are outside the possible values of the measuring scale 
+for(cutoff in 1:N) {
+  if(working_matrix[cutoff] < min(values)) {
+    working_matrix[cutoff] <- min(values)
+  } else if(working_matrix[cutoff] > max(values)) {
+    working_matrix[cutoff] <- max(values)
+  }
+}
+ 
+Healthy_diet <- working_matrix
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Healthy_diet) # add it to the file containing all variables that were simulated so far
+
+
+# Alcohol (Alc)
+# -> binary variable
+
+p1 <- p1_Alc
+B_U1.Alc <-  (logit(p1_U1.Alc)-logit(p1))/nun_U1.Alc # calculate the logistic regression beta value for the influence
+B_HC.Alc <-  (logit(p1_HC.Alc)-logit(p1))/nun_HC.Alc # calculate the logistic regression beta value for the influence
+values <- values_binary
+
+logit_p1 <- logit(p1)
+
+
+working_matrix <- matrix(ncol = 1, nrow = N)
+p <- matrix(ncol = 1, nrow = length(values)) # vector for calculating probabilities of different depression values
+
+m_U1 <- mean(Pop_generation$U1) # calculate for further analysis to use and not to calculate each (N) time(s)
+m_HC <- mean(Pop_generation$Health_consciousness) # calculate for further analysis to use and not to calculate each (N) time(s)
+
+# calculating probabilities of the variable values influenced by the variable's parents 
+for (i in 1:N) {
+  X <- exp(logit_p1 + B_U1.Alc*Pop_generation$U1[i] - B_U1.Alc*m_U1 + B_HC.Alc*Pop_generation$Health_consciousness[i] - B_HC.Alc*m_HC)
+  p[2] <- X/(1+X) # probability of being female under the influence of that X value
+  
+  # to avoid negative values, all values lower than 0 are set to zero and 
+  if(p[2] < 0) {
+    p[2] <- 0
+  } else if(p[2] > 1) {
+    p[2] <- 1
+  }
+  
+  p[1] <- 1 - p[2] # reverse probability
+  
+  working_matrix[i] <- sample(values, size = 1, prob = p)
+  if(is.wholenumber(i/10000)) {show(i)}
+ 
+}
+
+Alcohol <- working_matrix
+
+rm(m_U1, m_HC)
+
+# control matrix -> not necessary
+control_binary <- rbind(control_binary, c(rep(NA, 2)))
+control_binary$calc[cbrow] <- logit_p1
+control_binary$data[cbrow] <- glm(formula = Alcohol ~ Pop_generation$U1 + Pop_generation$Health_consciousness, family = binomial)[["coefficients"]][["(Intercept)"]]
+rownames(control_binary)[cbrow] <- "p1_Alc"
+cbrow <- cbrow + 1
+control_binary <- rbind(control_binary, c(rep(NA, 2)))
+control_binary$calc[cbrow] <- B_U1.Alc
+control_binary$data[cbrow] <- glm(formula = Alcohol ~ Pop_generation$U1 + Pop_generation$Health_consciousness, family = binomial)[["coefficients"]][["Pop_generation$U1"]]
+rownames(control_binary)[cbrow] <- "p1_U1.Alc"
+cbrow <- cbrow + 1
+control_binary <- rbind(control_binary, c(rep(NA, 2)))
+control_binary$calc[cbrow] <- B_HC.Alc
+control_binary$data[cbrow] <- glm(formula = Alcohol ~ Pop_generation$U1 + Pop_generation$Health_consciousness, family = binomial)[["coefficients"]][["Pop_generation$Health_consciousness"]]
+rownames(control_binary)[cbrow] <- "p1_HC.Alc"
+cbrow <- cbrow + 1
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Alcohol) # add it to the file containing all variables that were simulated so far
+
+
+# Smoking (Smo)
+# -> binary variable
+
+p1 <- p1_Smo
+B_HC.Smo <-  (logit(p1_HC.Smo)-logit(p1))/nun_HC.Smo # calculate the logistic regression beta value for the influence
+values <- values_binary
+
+
+logit_p1 <- logit(p1)
+
+
+working_matrix <- matrix(ncol = 1, nrow = N)
+p <- matrix(ncol = 1, nrow = length(values)) # vector for calculating probabilities of different depression values
+
+m_Smo <- mean(Pop_generation$Health_consciousness) # calculate for further analysis to use and not to calculate each (N) time(s)
+
+# calculating probabilities of the variable values influenced by the variable's parents 
+for (i in 1:N) {
+  X <- exp(logit_p1 + B_HC.Smo*Pop_generation$Health_consciousness[i] - B_HC.Smo*m_Smo)
+  p[2] <- X/(1+X) # probability of being female under the influence of that X value
+  
+  # to avoid negative values, all values lower than 0 are set to zero and 
+  if(p[2] < 0) {
+    p[2] <- 0
+  } else if(p[2] > 1) {
+    p[2] <- 1
+  }
+  
+  p[1] <- 1 - p[2] # reverse probability
+  working_matrix[i] <- sample(values, size = 1, prob = p)
+  if(is.wholenumber(i/10000)) {show(i)}
+
+}
+
+Smoking <- working_matrix
+
+rm(m_Smo)
+
+# control matrix -> not necessary
+control_binary <- rbind(control_binary, c(rep(NA, 2)))
+control_binary$calc[cbrow] <- logit_p1
+control_binary$data[cbrow] <- glm(formula = Smoking ~ Pop_generation$Health_consciousness, family = binomial)[["coefficients"]][["(Intercept)"]]
+rownames(control_binary)[cbrow] <- "p1_Smo"
+cbrow <- cbrow + 1
+control_binary <- rbind(control_binary, c(rep(NA, 2)))
+control_binary$calc[cbrow] <- B_HC.Smo
+control_binary$data[cbrow] <- glm(formula = Smoking ~ Pop_generation$Health_consciousness, family = binomial)[["coefficients"]][["Pop_generation$Health_consciousness"]]
+rownames(control_binary)[cbrow] <- "p1_HC.Smo"
+cbrow <- cbrow + 1
+
+
+
+
+# save, clean and be ready for next variable
+Pop_generation <- cbind(Pop_generation, Smoking) # add it to the file containing all variables that were simulated so far
+
+
+# Healthy lifestyle (HL)
+
+B_PA.HL <- C_PA.HL*(sd_HL/sd(Pop_generation$Physical_activity))
+B_HD.HL <- C_HD.HL*(sd_HL/sd(Pop_generation$Healthy_diet))
+B_Smo.HL <- C_Smo.HL*(sd_HL/sd(Pop_generation$Smoking))
+B_Alc.HL <- C_Alc.HL*(sd_HL/sd(Pop_generation$Alcohol))
+
+Healthy_lifestyle <- matrix(ncol = 1, nrow = N)
+
+Healthy_lifestyle <- rnorm(N, mean_HL, sd_HL) + B_PA.HL*Pop_generation$Physical_activity - B_PA.HL*mean(Pop_generation$Physical_activity) + B_HD.HL*Pop_generation$Healthy_diet - B_HD.HL*mean(Pop_generation$Healthy_diet) + B_Alc.HL*Pop_generation$Alcohol - B_Alc.HL*mean(Pop_generation$Alcohol) + B_Smo.HL*Pop_generation$Smoking - B_Smo.HL*mean(Pop_generation$Smoking)
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Healthy_lifestyle) # add it to the file containing all variables that were simulated so far
+
+
+# Diabetes
+# -> binary variable
+
+p1 <- p1_Dia
+B_Age.Dia <-  (logit(p1_Age.Dia)-logit(p1))/nun_Age.Dia # calculate the logistic regression beta value for the influence
+B_U1.Dia <-  (logit(p1_U1.Dia)-logit(p1))/nun_U1.Dia # calculate the logistic regression beta value for the influence
+B_HL.Dia <-  (logit(p1_HL.Dia)-logit(p1))/nun_HL.Dia # calculate the logistic regression beta value for the influence
+values <- values_binary
+
+
+logit_p1 <- logit(p1)
+
+
+working_matrix <- matrix(ncol = 1, nrow = N)
+p <- matrix(ncol = 1, nrow = length(values)) # vector for calculating probabilities of different depression values
+
+m_Age <- mean(Pop_generation$Age) # calculate for further analysis to use and not to calculate each (N) time(s)
+m_U1 <- mean(Pop_generation$U1) # calculate for further analysis to use and not to calculate each (N) time(s)
+m_HL <- mean(Pop_generation$Healthy_lifestyle) # calculate for further analysis to use and not to calculate each (N) time(s)
+
+
+# calculating probabilities of the variable values influenced by the variable's parents 
+for (i in 1:N) {
+  X <- exp(logit_p1 + B_Age.Dia*Pop_generation$Age[i] - B_Age.Dia*m_Age + B_U1.Dia*Pop_generation$U1[i] - B_U1.Dia*mean_U1 + B_HL.Dia*Pop_generation$Healthy_lifestyle[i] - B_HL.Dia*m_HL)
+  p[2] <- X/(1+X) # probability of being female under the influence of that X value
+  
+  # to avoid negative values, all values lower than 0 are set to zero and 
+  if(p[2] < 0) {
+    p[2] <- 0
+  } else if(p[2] > 1) {
+    p[2] <- 1
+  }
+  
+  p[1] <- 1 - p[2] # reverse probability
+  working_matrix[i] <- sample(values, size = 1, prob = p)
+  if(is.wholenumber(i/10000)) {show(i)}
+
+}
+
+Diabetes <- working_matrix
+
+rm(m_Age, m_U1, m_HL)
+
+# control matrix -> not necessary
+control_binary <- rbind(control_binary, c(rep(NA, 2)))
+control_binary$calc[cbrow] <- logit_p1
+control_binary$data[cbrow] <- glm(formula = Diabetes ~ Pop_generation$Age + Pop_generation$U1 + Pop_generation$Healthy_lifestyle, family = binomial)[["coefficients"]][["(Intercept)"]]
+rownames(control_binary)[cbrow] <- "p1_Dia"
+cbrow <- cbrow + 1
+control_binary <- rbind(control_binary, c(rep(NA, 2)))
+control_binary$calc[cbrow] <- B_Age.Dia
+control_binary$data[cbrow] <- glm(formula = Diabetes ~ Pop_generation$Age + Pop_generation$U1 + Pop_generation$Healthy_lifestyle, family = binomial)[["coefficients"]][["Pop_generation$Age"]]
+rownames(control_binary)[cbrow] <- "p1_Age.Dia"
+cbrow <- cbrow + 1
+control_binary <- rbind(control_binary, c(rep(NA, 2)))
+control_binary$calc[cbrow] <- B_U1.Dia
+control_binary$data[cbrow] <- glm(formula = Diabetes ~ Pop_generation$Age + Pop_generation$U1 + Pop_generation$Healthy_lifestyle, family = binomial)[["coefficients"]][["Pop_generation$U1"]]
+rownames(control_binary)[cbrow] <- "p1_U1.Dia"
+cbrow <- cbrow + 1
+control_binary <- rbind(control_binary, c(rep(NA, 2)))
+control_binary$calc[cbrow] <- B_HL.Dia
+control_binary$data[cbrow] <- glm(formula = Diabetes ~ Pop_generation$Age + Pop_generation$U1 + Pop_generation$Healthy_lifestyle, family = binomial)[["coefficients"]][["Pop_generation$Healthy_lifestyle"]]
+rownames(control_binary)[cbrow] <- "p1_HL.Dia"
+cbrow <- cbrow + 1
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Diabetes) # add it to the file containing all variables that were simulated so far
+
+
+# Vascular deposits (VD)
+
+B_Age.VD <- C_Age.VD*(sd_VD/sd(Pop_generation$Age))
+B_Dia.VD <- C_Dia.VD*(sd_VD/sd(Pop_generation$Diabetes))
+B_U2.VD <- C_U2.VD*(sd_VD/sd(Pop_generation$U2))
+B_HL.VD <- C_HL.VD*(sd_VD/sd(Pop_generation$Healthy_lifestyle))
+
+Vascular_deposits <- matrix(ncol = 1, nrow = N)
+
+Vascular_deposits <- rnorm(N, mean_VD, sd_VD) + B_Age.VD*Pop_generation$Age - B_Age.VD*mean(Pop_generation$Age) + B_U2.VD*Pop_generation$U2 - B_U2.VD*mean(Pop_generation$U2) + B_HL.VD*Pop_generation$Healthy_lifestyle - B_HL.VD*mean(Pop_generation$Healthy_lifestyle) + B_Dia.VD*Pop_generation$Diabetes - B_Dia.VD*mean(Pop_generation$Diabetes)
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Vascular_deposits) # add it to the file containing all variables that were simulated so far
+
+
+
+# Blood pressure systolic (BPs)
+
+# define currently used values (sd, mean, scale)
+sd <- sd_BPs
+mean <- mean_BPs
+values <- values_BPs
+
+# standardized causal influence in beta values
+B_VD.BPs <- C_VD.BP*(sd_BPs/sd(Pop_generation$Vascular_deposits))
+B_U1.BPs <- C_U1.BP*(sd_BPs/sd(Pop_generation$U1))
+
+
+working_matrix <- matrix(ncol = 1, nrow = N) # create empty matrix
+
+working_matrix <- round(rnorm(N, mean, sd) +  B_VD.BPs*Pop_generation$Vascular_deposits - B_VD.BPs*mean(Pop_generation$Vascular_deposits) + B_U1.BPs*Pop_generation$U1 - B_U1.BPs*mean(Pop_generation$U1))
+
+Blood_pressure_systolic <- working_matrix
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Blood_pressure_systolic) # add it to the file containing all variables that were 
+
+
+
+# Blood pressure diastolic (BPd)
+
+# define currently used values (sd, mean, scale)
+sd <- sd_BPd
+mean <- mean_BPd
+values <- values_BPd
+
+# standardized causal influence in beta values
+#B_VD.BPd <- C_VD.BP*(sd_BPd/sd_VD)
+#B_U1.BPd <- C_U1.BP*(sd_BPd/sd_U1)
+B_BPs.BPd <- C_BPs.BPd*(sd_BPd/sd(Pop_generation$Blood_pressure_systolic))
+
+
+working_matrix <- round(rnorm(N, mean, sqrt(sd^2 - B_BPs.BPd^2 * var(Blood_pressure_systolic))) +  B_BPs.BPd*Pop_generation$Blood_pressure_systolic - B_BPs.BPd*mean(Pop_generation$Blood_pressure_systolic))
+
+Blood_pressure_diastolic <- working_matrix
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Blood_pressure_diastolic) # add it to the file containing all variables that were simulated so far
+
+
+
+# Hypertension (Hyp)
+# created as cut-off from blood pressure systolic and diastolic
+
+Hypertension <- matrix(ncol = 1, nrow = N)
+
+for(i in 1:N) {
+  if(Pop_generation$Blood_pressure_systolic[i] > 140 | Pop_generation$Blood_pressure_diastolic[i] > 90) {
+    Hypertension[i] <- 1
+  } else {
+    Hypertension[i] <- 0
+  }
+}
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Hypertension) # add it to the file containing all variables that were simulated so far
+
+
+# Neurodegeneration (ND)
+
+# define currently used values (sd, mean, scale)
+mean <- mean_ND
+sd <- sd_ND
+
+# standardized causal influence in beta values
+B_SE.ND <- C_SE.ND*(sd_ND/sd(Pop_generation$Social_engagement))
+B_HI.ND <- C_HI.ND*(sd_ND/sd(Pop_generation$Hearing_impairment))
+B_Age.ND <- C_Age.ND*(sd_ND/sd(Pop_generation$Age))
+B_U1.ND <- C_U1.ND*(sd_ND/sd(Pop_generation$U1))
+B_U2.ND <- C_U2.ND*(sd_ND/sd(Pop_generation$U2))
+B_VD.ND <- C_VD.ND*(sd_ND/sd(Pop_generation$Vascular_deposits))
+
+
+Neurodegeneration <- rnorm(N, mean, sd) +  B_Age.ND*Pop_generation$Age - B_Age.ND*mean(Pop_generation$Age) + B_U1.ND*Pop_generation$U1 - B_U1.ND*mean(Pop_generation$U1) + B_U2.ND*Pop_generation$U2 - B_U2.ND*mean(Pop_generation$U2) + B_HI.ND*Pop_generation$Hearing_impairment - B_HI.ND*mean(Pop_generation$Hearing_impairment) + B_VD.ND*Pop_generation$Vascular_deposits - B_VD.ND*mean(Pop_generation$Vascular_deposits) + B_SE.ND*Pop_generation$Social_engagement - B_SE.ND*mean(Pop_generation$Social_engagement)
+
+
+# save, clean and be ready for next variable
+Pop_generation <- cbind(Pop_generation, Neurodegeneration) # add it to the file containing all variables that were simulated so far
+
+
+
+# Mental activities (MA)
+
+# define currently used values (sd, mean, scale)
+mean <- mean_MA
+sd <- sd_MA
+values <- values_MA
+
+# standardized causal influence in beta values
+B_U3.MA <- C_U3.MA*(sd_MA/sd(Pop_generation$U3))
+
+Mental_activities <- round(rnorm(N, mean, sd) +  B_U3.MA*Pop_generation$U3 - B_U3.MA*mean(Pop_generation$U3))
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Mental_activities) # add it to the file containing all variables that were simulated so far
+
+
+# Premorbid_IQ (IQ)
+
+# define currently used values (sd, mean, scale)
+mean <- mean_IQ
+sd <- sd_IQ
+values <- values_IQ
+
+# standardized causal influence in beta values
+B_U3.IQ <- C_U3.IQ*(sd_IQ/sd(Pop_generation$U3))
+
+Premorbid_IQ <- round(rnorm(N, mean, sd) +  B_U3.IQ*Pop_generation$U3 - B_U3.IQ*mean(Pop_generation$U3))
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Premorbid_IQ) # add it to the file containing all variables that were simulated so far
+
+
+
+# Education (Edu)
+
+# define currently used values (sd, mean, scale)
+sd <- sd_Edu
+mean <- mean_Edu
+values <- values_Edu
+
+# standardized causal influence in beta values
+B_U1.Edu <- C_U1.Edu*(sd_Edu/sd(Pop_generation$U1))
+B_U3.Edu <- C_U3.Edu*(sd_Edu/sd(Pop_generation$U3))
+B_Sex.Edu <- C_Sex.Edu*(sd_Edu/sd(Pop_generation$Sex)) # not divided by sd(sex) because that is a binary variable
+
+
+
+working_matrix <- round(rnorm(N, mean, sd) +  B_U1.Edu*Pop_generation$U1 - B_U1.Edu*mean(Pop_generation$U1) + B_U3.Edu*Pop_generation$U3 - B_U3.Edu*mean(Pop_generation$U3) + B_Sex.Edu*Pop_generation$Sex - B_Sex.Edu*mean(Pop_generation$Sex))
+
+# make sure that no values are outside the possible values of the measuring scale 
+for(cutoff in 1:N) {
+  if(working_matrix[cutoff] < min(values)) {
+    working_matrix[cutoff] <- min(values)
+  } else if(working_matrix[cutoff] > max(values)) {
+    working_matrix[cutoff] <- max(values)
+  }
+}
+ 
+Education <- working_matrix
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Education) # add it to the file containing all variables that were simulated so far
+
+
+
+# Occupation (Occ)
+
+# define currently used values (sd, mean, scale)
+sd <- sd_Occ
+mean <- mean_Occ
+values <- values_Occ
+
+# standardized causal influence in beta values
+B_U1.Occ <- C_U1.Occ*(sd_Occ/sd(Pop_generation$U1))
+B_U3.Occ <- C_U3.Occ*(sd_Occ/sd(Pop_generation$U3))
+B_Sex.Occ <- C_Sex.Occ*(sd_Occ/sd(Pop_generation$Sex)) # not divided by sd(sex) because that's a binary variable
+B_Edu.Occ <- C_Edu.Occ*(sd_Occ/sd(Pop_generation$Education))
+
+
+working_matrix <- round(rnorm(N, mean, sd) + B_U1.Occ*Pop_generation$U1 - B_U1.Occ*mean(Pop_generation$U1) + B_U3.Occ*Pop_generation$U3 - B_U3.Occ*mean(Pop_generation$U3) + B_Sex.Occ*Pop_generation$Sex - B_Sex.Occ*mean(Pop_generation$Sex) + B_Edu.Occ*Pop_generation$Education - B_Edu.Occ*mean(Pop_generation$Education))
+
+# make sure that no values are outside the possible values of the measuring scale 
+for(cutoff in 1:N) {
+  if(working_matrix[cutoff] < min(values)) {
+    working_matrix[cutoff] <- min(values)
+  } else if(working_matrix[cutoff] > max(values)) {
+    working_matrix[cutoff] <- max(values)
+  }
+}
+ 
+Occupation <- working_matrix
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Occupation) # add it to the file containing all variables that were simulated so far
+
+
+
+# Cognitive reserve (CR)
+
+B_Edu.CR <- C_Edu.CR*(sd_CR/sd(Pop_generation$Education))
+B_Occ.CR <- C_Occ.CR*(sd_CR/sd(Pop_generation$Occupation))
+B_MA.CR <- C_MA.CR*(sd_CR/sd(Pop_generation$Mental_activities))
+B_IQ.CR <- C_IQ.CR*(sd_CR/sd(Pop_generation$Premorbid_IQ))
+B_CL.CR <- C_CL.CR*(sd_CR/sd(Pop_generation$Cognitive_load))
+
+
+Cognitive_reserve <- rnorm(N, mean_CR, sd_CR) + B_Edu.CR*Pop_generation$Education - B_Edu.CR*mean(Pop_generation$Education) + B_Occ.CR*Pop_generation$Occupation - B_Occ.CR*mean(Pop_generation$Occupation) + B_MA.CR*Pop_generation$Mental_activities - B_MA.CR*mean(Pop_generation$Mental_activities) + B_IQ.CR*Pop_generation$Premorbid_IQ - B_IQ.CR*mean(Pop_generation$Premorbid_IQ) + B_CL.CR*Pop_generation$Cognitive_load - B_CL.CR*mean(Pop_generation$Cognitive_load)
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Cognitive_reserve) # add it to the file containing all variables that were simulated so far
+
+
+
+# Family history of dementia (FH)
+# -> binary variable
+
+p1 <- p1_FH
+B_U1.FH <-  (logit(p1_U1.FH)-logit(p1))/nun_U1.FH # calculate the logistic regression beta value for the influence
+B_U2.FH <-  (logit(p1_U2.FH)-logit(p1))/nun_U2.FH # calculate the logistic regression beta value for the influence
+values <- values_binary
+
+
+logit_p1 <- logit(p1)
+
+working_matrix <- matrix(ncol = 1, nrow = N)
+p <- matrix(ncol = 1, nrow = length(values)) # vector for calculating probabilities of different depression values
+
+m_U1 <- mean(Pop_generation$U1) # calculate for further analysis to use and not to calculate each (N) time(s)
+m_U2 <- mean(Pop_generation$U2) # calculate for further analysis to use and not to calculate each (N) time(s)
+
+# calculating probabilities of the variable values influenced by the variable's parents 
+for (i in 1:N) {
+  X <- exp(logit_p1 + B_U1.FH*Pop_generation$U1[i] - B_U1.FH*m_U1 + B_U2.FH*Pop_generation$U2[i] - B_U2.FH*m_U2)
+  p[2] <- X/(1+X) # probability of being female under the influence of that X value
+  
+  # to avoid negative values, all values lower than 0 are set to zero and 
+  if(p[2] < 0) {
+    p[2] <- 0
+  } else if(p[2] > 1) {
+    p[2] <- 1
+  }
+  
+  p[1] <- 1 - p[2] # reverse probability
+  working_matrix[i] <- sample(values, size = 1, prob = p)
+  if(is.wholenumber(i/10000)) {show(i)}
+
+}
+
+Family_history <- working_matrix
+
+rm(m_U1, m_U2)
+
+# control matrix -> not necessary
+control_binary <- rbind(control_binary, c(rep(NA, 2)))
+control_binary$calc[cbrow] <- logit_p1
+control_binary$data[cbrow] <- glm(formula = Family_history ~ Pop_generation$U1 + Pop_generation$U2, family = binomial)[["coefficients"]][["(Intercept)"]]
+rownames(control_binary)[cbrow] <- "p1_FH"
+cbrow <- cbrow + 1
+control_binary <- rbind(control_binary, c(rep(NA, 2)))
+control_binary$calc[cbrow] <- B_U1.FH
+control_binary$data[cbrow] <- glm(formula = Family_history ~ Pop_generation$U1 + Pop_generation$U2, family = binomial)[["coefficients"]][["Pop_generation$U1"]]
+rownames(control_binary)[cbrow] <- "p1_U1.FH"
+cbrow <- cbrow + 1
+control_binary <- rbind(control_binary, c(rep(NA, 2)))
+control_binary$calc[cbrow] <- B_U2.FH
+control_binary$data[cbrow] <- glm(formula = Family_history ~ Pop_generation$U1 + Pop_generation$U2, family = binomial)[["coefficients"]][["Pop_generation$U2"]]
+rownames(control_binary)[cbrow] <- "p1_U2.FH"
+cbrow <- cbrow + 1
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Family_history) # add it to the file containing all variables that were simulated so far
+
+
+
+# Loneliness
+
+# define currently used values (sd, mean, scale)
+mean <- mean_Lon
+sd <- sd_Lon
+values <- values_Lon
+
+
+# standardized causal influence in beta values
+B_SE.Lon <- C_SE.Lon*(sd_Lon/sd(Pop_generation$Social_engagement))
+
+
+working_matrix <- round(rnorm(N, mean, sd) + B_SE.Lon*Pop_generation$Social_engagement - B_SE.Lon*mean(Pop_generation$Social_engagement))
+
+# make sure that no values are outside the possible values of the measuring scale 
+for(cutoff in 1:N) {
+  if(working_matrix[cutoff] < min(values)) {
+    working_matrix[cutoff] <- min(values)
+  } else if(working_matrix[cutoff] > max(values)) {
+    working_matrix[cutoff] <- max(values)
+  }
+}
+ 
+Loneliness <- working_matrix
+
+
+# bind variables
+Pop_generation <- cbind(Pop_generation, Loneliness) # add it to the file containing all variables that were simulated so far
+
+
+
+# Dementia
+
+# define currently used values (sd, mean, scale)
+mean <- mean_Dem
+sd <- sd_Dem
+values <- values_Dem
+
+# standardized causal influence in beta values
+B_Age.Dem <- C_Age.Dem*(sd_Dem/sd(Pop_generation$Age))
+B_U1.Dem <- C_U1.Dem*(sd_Dem/sd(Pop_generation$U1))
+B_U2.Dem <- C_U2.Dem*(sd_Dem/sd(Pop_generation$U2))
+B_CR.Dem <- C_CR.Dem*(sd_Dem/sd(Pop_generation$Cognitive_reserve))
+B_Dep.Dem <- C_Dep.Dem*(sd_Dem/sd(Pop_generation$Depression))
+B_ND.Dem <- C_ND.Dem*(sd_Dem/sd(Pop_generation$Neurodegeneration))
+
+
+working_matrix <- round(rnorm(N, mean, sd) + B_Age.Dem*Pop_generation$Age - B_Age.Dem*mean(Pop_generation$Age) + B_U1.Dem*Pop_generation$U1 - B_U1.Dem*mean(Pop_generation$U1) + B_U2.Dem*Pop_generation$U2 - B_U2.Dem*mean(Pop_generation$U2) + B_CR.Dem*Pop_generation$Cognitive_reserve - B_CR.Dem*mean(Pop_generation$Cognitive_reserve) + B_Dep.Dem*Pop_generation$Depression - B_Dep.Dem*mean(Pop_generation$Depression) + B_ND.Dem*Pop_generation$Neurodegeneration - B_ND.Dem*mean(Pop_generation$Neurodegeneration))
+
+# make sure that no values are outside the possible values of the measuring scale 
+for(cutoff in 1:N) {
+  if(working_matrix[cutoff] < min(values)) {
+    working_matrix[cutoff] <- min(values)
+  } else if(working_matrix[cutoff] > max(values)) {
+    working_matrix[cutoff] <- max(values)
+  }
+}
+ 
+Dementia <- working_matrix
+
+Pop_generation <- cbind(Pop_generation, Dementia) # add it to the file containing all variables that were simulated so far
+
+
+
+# Disorder in the parental home (DP)
+
+# define currently used values (sd, mean, scale)
+mean <- mean_DP
+sd <- sd_DP
+values <- values_DP
+
+working_matrix <- round(rnorm(N, mean, sd))
+
+# make sure that no values are outside the possible values of the measuring scale 
+for(cutoff in 1:N) {
+  if(working_matrix[cutoff] < min(values)) {
+    working_matrix[cutoff] <- min(values)
+  } else if(working_matrix[cutoff] > max(values)) {
+    working_matrix[cutoff] <- max(values)
+  }
+}
+ 
+Disorder_parental_home <- working_matrix
+
+Pop_generation <- cbind(Pop_generation, Disorder_parental_home) # add it to the file containing all variables that were simulated so far
+
+
+
+# Disorder in the apartment (DA)
+
+# define currently used values (sd, mean, scale)
+mean <- mean_DA
+sd <- sd_DA
+values <- values_DA
+
+# standardized causal influence in beta values
+B_Dem.DA <- C_Dem.DA*(sd_DA/sd(Pop_generation$Dementia))
+B_DP.DA <- C_DP.DA*(sd_DA/sd(Pop_generation$Disorder_parental_home))
+
+
+working_matrix <- round(rnorm(N, mean, sqrt(sd^2 - B_Dem.DA^2 * var(Dementia) - B_DP.DA^2 * var(Disorder_parental_home) - 2*cov(Dementia, Disorder_parental_home))) + B_Dem.DA*Pop_generation$Dementia - B_Dem.DA*mean(Pop_generation$Dementia) + B_DP.DA*Pop_generation$Disorder_parental_home - B_DP.DA*mean(Pop_generation$Disorder_parental_home))
+
+# make sure that no values are outside the possible values of the measuring scale 
+for(cutoff in 1:N) {
+  if(working_matrix[cutoff] < min(values)) {
+    working_matrix[cutoff] <- min(values)
+  } else if(working_matrix[cutoff] > max(values)) {
+    working_matrix[cutoff] <- max(values)
+  }
+}
+ 
+Disorder_apartment <- working_matrix
+
+Pop_generation <- cbind(Pop_generation, Disorder_apartment) # add it to the file containing all variables that were simulated so far
+
+
+
+# Liking yellow (LY)
+
+# define currently used values (sd, mean, scale)
+mean <- mean_LY
+sd <- sd_LY
+values <- values_LY
+
+working_matrix <- round(rnorm(N, mean, sd))
+
+# make sure that no values are outside the possible values of the measuring scale 
+for(cutoff in 1:N) {
+  if(working_matrix[cutoff] < min(values)) {
+    working_matrix[cutoff] <- min(values)
+  } else if(working_matrix[cutoff] > max(values)) {
+    working_matrix[cutoff] <- max(values)
+  }
+}
+ 
+Liking_yellow <- working_matrix
+
+Pop_generation <- cbind(Pop_generation, Liking_yellow) # add it to the file containing all variables that were simulated so far
+
+
+
+# Handedness
+# -> binary variable
+
+p1 <- p1_FH
+values <- values_binary
+
+p <- c(p1, (1-p1))
+
+Handedness <- sample(values, size = N, prob = p, replace = TRUE)
+
+
+Pop_generation <- cbind(Pop_generation, Handedness) # add it to the file containing all variables that were simulated so far
+
+
+
+# Selection to certain types of studies
+
+# define currently used values (sd, mean, scale)
+mean <- mean_SS
+sd <- sd_SS
+values <- values_SS
+
+# standardized causal influence in beta values
+B_HI.SS <- C_HI.SS*(sd_SS/sd(Pop_generation$Hearing_impairment))
+B_Dem.SS <- C_Dem.SS*(sd_SS/sd(Pop_generation$Dementia))
+
+
+working_matrix <- round(rnorm(N, mean, sd) + B_HI.SS*Pop_generation$Hearing_impairment - B_HI.SS*mean(Pop_generation$Hearing_impairment) + B_Dem.SS*Pop_generation$Dementia - B_Dem.SS*mean(Pop_generation$Dementia))
+
+
+# make sure that no values are outside the possible values of the measuring scale 
+for(cutoff in 1:N) {
+  if(working_matrix[cutoff] < min(values)) {
+    working_matrix[cutoff] <- min(values)
+  } else if(working_matrix[cutoff] > max(values)) {
+    working_matrix[cutoff] <- max(values)
+  }
+}
+ 
+Selection_studies <- working_matrix
+
+
+Pop_generation <- cbind(Pop_generation, Selection_studies) # add it to the file containing all variables that were simulated so far
+
+
+
+# Time having been in a specific building/place/city (where also the study takes place)
+
+# define currently used values (sd, mean, scale)
+mean <- mean_TB
+sd <- sd_TB
+values <- values_TB
+
+# standardized causal influence in beta values
+B_SS.TB <- C_SS.TB*(sd_TB/sd(Pop_generation$Selection_studies))
+
+
+working_matrix <- round(rnorm(N, mean, sd) + B_SS.TB*Pop_generation$Selection_studies - B_SS.TB*mean(Pop_generation$Selection_studies))
+
+# make sure that no values are outside the possible values of the measuring scale 
+for(cutoff in 1:N) {
+  if(working_matrix[cutoff] < min(values)) {
+    working_matrix[cutoff] <- min(values)
+  } else if(working_matrix[cutoff] > max(values)) {
+    working_matrix[cutoff] <- max(values)
+  }
+}
+ 
+Time_building <- working_matrix
+
+
+Pop_generation <- cbind(Pop_generation, Time_building) # add it to the file containing all variables that were simulated so far
+
+
+Population_Dementia <- Pop_generation[ , order(names(Pop_generation))]
+
+write.csv2(Population_Dementia, 'Population_Dementia.csv')
+save(Population_Dementia, file = 'Population_Dementia.RData')
+    
+
+
+# logit transformation of the binary variables for path coefficient calculation
+variables_binary <- data.frame(Population_Dementia$Alcohol, Population_Dementia$Diabetes, Population_Dementia$Family_history, Population_Dementia$Handedness, Population_Dementia$Hypertension, Population_Dementia$Sex, Population_Dementia$Smoking)
+colnames(variables_binary) <- str_replace(colnames(variables_binary), "Population_Dementia.", "")
+
+
+
+for(i_vb in 1:ncol(variables_binary)) {
+  X <- variables_binary[i_vb]
+  X_name <- colnames(variables_binary)[i_vb]
+  logit_adj <- (ln((0.5+0.95*(X-0.5))/(1-(0.5+0.95*(X-0.5)))))
+  
+  #assign(paste(X_name, '_logit', sep = ""), logit_adj)
+
+  if(i_vb == 1) {
+    Population_Dementia_logit <- data.frame(Population_Dementia, logit_adj)
+  } else {
+    Population_Dementia_logit <- data.frame(Population_Dementia_logit, logit_adj)
+  }
+  
+}
+
+rm(i_vb, logit_adj, X, X_name)
+
+# change the names of the logit transformed variables to X_logit
+colnames(Population_Dementia_logit)[(ncol(Population_Dementia_logit)-(ncol(variables_binary)-1)):ncol(Population_Dementia_logit)] <- str_replace(colnames(Population_Dementia_logit)[(ncol(Population_Dementia_logit)-(ncol(variables_binary)-1)):ncol(Population_Dementia_logit)], ".1", "_logit")
+
+Population_Dementia_logit <- Population_Dementia_logit[ , order(names(Population_Dementia_logit))]
+
+# delete the binary not logit transformed variables
+for(i_poplogcol in ncol(Population_Dementia_logit):1) {
+  if(colnames(Population_Dementia_logit)[i_poplogcol] %in% colnames(variables_binary)) {
+    Population_Dementia_logit <- Population_Dementia_logit[, -i_poplogcol]
+  }
+}
+
+colnames(Population_Dementia_logit) <- str_replace(colnames(Population_Dementia_logit), "_logit", "")
+
+rm(i_poplogcol, variables_binary)
+
+
+save(Population_Dementia_logit, file = 'Population_Dementia_logit.RData')
