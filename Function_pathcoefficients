@@ -1,0 +1,79 @@
+# calculate path coefficients
+
+pathcoefficients <- function(dat = NULL, causalgraph = NULL) {
+
+# install and load packages
+packs_needed <- c("dagitty", "dplyr")
+for (p in packs_needed)
+  if(!require(p, character.only = TRUE)) install.packages(p)
+  library(p, character.only = TRUE)
+
+rm(p)
+rm(packs_needed)
+
+  
+try(rm(causal_paths_coefs), silent = TRUE)
+
+
+for(i_varchild in 1: length(colnames(dat))) {
+  number_children <- length(children(causalgraph, colnames(dat)[i_varchild])) # calculate how many children the variable has
+
+  if(length(children(causalgraph, colnames(dat)[i_varchild])) > 0) { # if the variable has children they are filled in the matrix, otherwise nothing happens
+    
+    if(exists("causal_paths_coefs") == FALSE) { # if it is first entry, matrix needs to be generated with number rows = number children of that variable
+      causal_paths_coefs <- matrix(ncol = 2, nrow = number_children) %>% data.frame()
+      colnames(causal_paths_coefs) <- c("parent", "child")
+      
+      causal_paths_coefs[,1] <- colnames(dat)[i_varchild] # IV name in first columns so many rows as the variable has children
+      causal_paths_coefs[,2] <- children(causalgraph, colnames(dat)[i_varchild]) # names of the children variables in column 2
+    
+    } else { # otherwise add as many rows as the variable has children
+      
+    causal_paths_coefs[(nrow(causal_paths_coefs)+1):(nrow(causal_paths_coefs)+number_children),1] <- colnames(dat)[i_varchild] # IV name in first columns so many rows as the variable has children
+    causal_paths_coefs[(nrow(causal_paths_coefs)-(number_children-1)):(nrow(causal_paths_coefs)),2] <- children(causalgraph, colnames(dat)[i_varchild]) # names of the children variables in column 2   
+    }
+
+  }
+}
+
+rm(i_varchild)
+
+for(i_numbercde in 1: nrow(causal_paths_coefs)) { # calculate beta values
+  Y <- dat[,colnames(dat) == causal_paths_coefs$child[i_numbercde]] # DV/child
+  Y_name <- colnames(dat)[colnames(dat) == causal_paths_coefs$child[i_numbercde]] # IV/parent
+  sd_Y <- sd(Y)
+  X <- dat[,colnames(dat) == causal_paths_coefs$parent[i_numbercde]] # IV/parent
+  X_name <- colnames(dat)[colnames(dat) == causal_paths_coefs$parent[i_numbercde]] # IV/parent
+  sd_X <- sd(X)
+
+  Z <- adjustmentSets(causalgraph, exposure = X_name, outcome = Y_name, effect = "direct")[[1]]
+
+  dat_lm <- data.frame(Y, X)
+  
+  # add controlling variables to linear model (if there are any)
+  if(length(Z) > 0) {
+    for(i_np in 1: length(Z)) {
+       dat_lm <- cbind(dat_lm, dat[,colnames(dat) == Z[i_np]])
+       colnames(dat_lm)[i_np+2] <- paste('Z', i_np, sep = "_")
+      
+    }
+  }
+
+  
+  if(i_numbercde == 1) {
+    causal_paths_coefs$beta <- NA
+    causal_paths_coefs$C.stand <- NA
+    causal_paths_coefs$C.stand_round <- NA 
+  }
+  
+    
+  causal_paths_coefs$beta[i_numbercde] <- lm(Y ~ ., data = dat_lm)[["coefficients"]][["X"]]
+  causal_paths_coefs$C.stand[i_numbercde] <- (causal_paths_coefs$beta[i_numbercde])*(sd_X/sd_Y)
+  causal_paths_coefs$C.stand_round[i_numbercde] <- round(causal_paths_coefs$C.stand[i_numbercde], 2)
+  
+  try(rm(dat_lm, X, Y, Z, sd_X, sd_Y))
+}
+
+Output <- causal_paths_coefs
+
+}
