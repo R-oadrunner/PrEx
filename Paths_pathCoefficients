@@ -1,0 +1,111 @@
+# Calculate the paths and path coefficients of the population
+
+
+# functions needed: pathcoefficients.R, pathslist.R, pathsvalues.R
+
+data_used <- Population_Dementia_logit
+causal_graph <- Dem_Pop
+variables <- colnames(data_used)
+
+
+path_coefs <- pathcoefficients(dat = data_used, causalgraph = causal_graph)
+save(path_coefs, file = "path_coefs.RData")
+
+
+ALL_paths_list <- list()
+ALL_paths_coefficients <- list()
+
+cor_correlations <- matrix(ncol = length(variables), nrow = length(variables))
+colnames(cor_correlations) <- rownames(cor_correlations) <- variables
+
+cor_calculations <- cor_correlations
+
+for(i_setIV in 1: length(variables)) {
+  independent_variable <- variables[i_setIV]
+  ALL_paths_list[[i_setIV]] <- NA
+  names(ALL_paths_list)[[i_setIV]] <- independent_variable
+  ALL_paths_coefficients[[i_setIV]] <- NA
+  names(ALL_paths_coefficients)[[i_setIV]] <- independent_variable
+  
+  for(i_setDV in 1: length(variables)) {
+    dependent_variable <- variables[i_setDV]
+    ALL_paths_list[[i_setIV]][[i_setDV]] <- list(NA)
+    names(ALL_paths_list[[i_setIV]])[[i_setDV]] <- dependent_variable
+    ALL_paths_coefficients[[i_setIV]][[i_setDV]] <- list(NA)
+    names(ALL_paths_coefficients[[i_setIV]])[[i_setDV]] <- dependent_variable
+        
+    
+    if(independent_variable != dependent_variable) {
+    
+      Ind_paths_list <- pathslist(IV = independent_variable, DV = dependent_variable, causalgraph = causal_graph)
+      causal_paths <- Ind_paths_list[["causal_paths"]]
+      non_causal_paths <- Ind_paths_list[["non_causal_paths"]]
+      Ind_paths_coefficients <- pathsvalues(causalpaths = causal_paths, noncausalpaths = non_causal_paths, pathcoefs = path_coefs, IV = independent_variable, DV = dependent_variable)
+      
+      cor_correlations[independent_variable, dependent_variable] <- cor(data_used[,dependent_variable], data_used[,independent_variable])
+      
+      
+      ALL_paths_list[[i_setIV]][[i_setDV]] <- Ind_paths_list
+      ALL_paths_coefficients[[i_setIV]][[i_setDV]] <- Ind_paths_coefficients
+      
+      # sum the list coefficients
+      
+      
+      output <- Ind_paths_coefficients 
+        
+      sum_nc <- 0
+      
+      if(length(output[["non_causal_paths"]]) > 0) {
+        for(h_par in 1:length(output[["non_causal_paths"]])){
+          if(length(output[["non_causal_paths"]][[h_par]]) != 0) {
+            for(i_paths in 1:length(output[["non_causal_paths"]][[h_par]])) {
+              if(i_paths == 1) {
+                sum_paths <- output[["non_causal_paths"]][[h_par]][[i_paths]][[2]]
+              } else {
+                sum_paths <- sum_paths + output[["non_causal_paths"]][[h_par]][[i_paths]][[2]]
+              }
+            }
+            sum_nc <- sum_nc + sum_paths
+          }
+        }
+      }
+      
+      
+      if(length(output[["causal_paths"]]) > 0) {
+        for(i_paths in 1:length(output[["causal_paths"]])) {
+          if(i_paths == 1) {
+            sum_paths <- output[["causal_paths"]][[i_paths]][[2]]
+          } else {
+            sum_paths <- sum_paths + output[["causal_paths"]][[i_paths]][[2]]
+          }
+        }
+        sum_c <- sum_paths
+      } else {
+        sum_c <- 0
+      }
+      
+      cor_calculations[independent_variable, dependent_variable] <- sum_c + sum_nc
+      } else {
+        cor_calculations[independent_variable, dependent_variable] <- 1
+        cor_correlations[independent_variable, dependent_variable] <- cor(data_used[,dependent_variable], data_used[,independent_variable])
+        
+      }
+    
+    }
+} # end i_setIV and i_setDV
+
+
+
+# check difference between calculated and actual correlations
+
+cor_bias <- cor_calculations - cor_correlations
+
+cor_bias_round <- cor_bias
+cor_bias_round[abs(cor_bias) < 0.001] <- 0
+
+cor_compare <- list(cor_calculations, cor_correlations, cor_bias, cor_bias_round)
+
+
+save(cor_compare, file = 'cor_compare.RData')
+save(ALL_paths_list, file = 'ALL_paths_list.RData')
+save(ALL_paths_coefficients, file = 'ALL_paths_coefficients.RData')
