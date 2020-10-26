@@ -1,0 +1,317 @@
+# paths between two specific variables (causal and non-causal)
+
+pathslist <- function(IV = independent_variable, DV = dependent_variable, causalgraph = causal_graph) {
+
+    
+  # install and load packages
+  packs_needed <- c("dagitty", "dplyr")
+  for (p in packs_needed)
+    if(!require(p, character.only = TRUE)) install.packages(p)
+    library(p, character.only = TRUE)
+  
+  rm(p)
+  rm(packs_needed)
+  
+  
+  
+  # calculating with path coefficients
+  
+  start_new <- TRUE
+
+
+  i_paths_found <- 1
+  round <- 1
+  status <- "working"
+  causal_paths_variables <- list()
+  causal_paths_coefs <- list()
+  
+  
+  parents_IV <- parents(causalgraph, IV)
+
+  
+  if(IV == DV) { # check if IV equals DV and fill in NA for this field instead of calculating path coefficients
+  } else {
+
+    # first calculate causal effects from IV to DV
+    
+    X <- IV
+    
+    
+    current_path_variables <- matrix(c(IV, 1), 1, 2)
+    colnames(current_path_variables) <- c("Variable", "Currently_tested_child")
+    
+
+    causal_effects <- matrix(nrow = 1, ncol = 3) %>% data.frame()
+    colnames(causal_effects) <- c("CDE", "CIE", "CDE_and_CIE")
+    
+    # CONTROLLED DIRECT CAUSAL EFFECT
+    CDE <- matrix(c("NO", 0), 1, 2) %>% data.frame()
+    colnames(CDE) <- c("Direct_effect?", "Coefficient")
+    CDE$Coefficient <- as.numeric(as.character(CDE$Coefficient))
+    
+    
+    
+    if(length(children(causalgraph, X)) < 1) { # check if variable X has children; if not, there is definitely no causal effect on the DV
+      CDE$`Direct_effect?` <- "NO"
+      CDE$Coefficient <- 0
+      causal_effects$CDE_and_CIE <- 0
+      causal_effects$CIE <- 0
+    } else {
+      for(i_cde in 1:length(children(causalgraph, X))) { # otherwise children of X are checked if they = DV
+        if(children(causalgraph, X)[i_cde] == DV) {
+          CDE$`Direct_effect?` <- "YES" # if children X = DV, a direct causal effect exists
+          CDE$Coefficient <- "MV"
+        }
+      }
+    }
+    
+    
+    causal_effects$CDE <- CDE$Coefficient
+
+# DIRECT AND INDIRECT CAUSAL EFFECT
+      
+      repeat{
+      
+
+        if(length(children(causalgraph, X)) == 0 || X == DV) { # check if current variable has children or not or equals the dependent variable
+         
+            w <- "Wait"
+            while(w == "Wait") {
+              if(length(children(causalgraph, X)) <= current_path_variables[nrow(current_path_variables),2] & X == IV) { # check if X = IV and all children were already used
+                status <- "ready"
+                break()
+              }
+              current_path_variables <- matrix(current_path_variables[-nrow(current_path_variables), ], ncol = 2) # if it is not the IV, you move back to the previous parent variable...
+              X <- current_path_variables[nrow(current_path_variables), 1] #... and define it again as the current variable
+              #current_path_coefs <- matrix(current_path_coefs[,-ncol(current_path_coefs)], 1, ncol(current_path_coefs)-1) # also delete the last, now unnecessary path coefficient
+              
+              if(length(children(causalgraph, X)) > as.numeric(current_path_variables[nrow(current_path_variables),2])) { # check if there are still other children of the variable that where not used yet
+                w <- "Go" # change to exit from loop if other children are available; otherwise the procedure is repeated and the you go back again to the previous parent
+              }
+            }
+            
+            current_path_variables[nrow(current_path_variables),2] <- c(as.numeric(as.character(current_path_variables[nrow(current_path_variables),2])) + 1)
+          #}
+        }
+        
+        if(status == "ready") {
+          #show("...done")
+          break()
+        }
+        
+
+        X <- children(causalgraph, X)[[as.numeric(current_path_variables[nrow(current_path_variables), 2])]] # define the new X by taking the child of the current variable X
+        current_path_variables <- rbind(current_path_variables, c(X, 1)) # adding this new X to the currently followed path
+       
+        if(X == DV) {
+          # save current path variables and the belonging path coefficients in two seperated lists
+          for (i_save in 1:nrow(current_path_variables)) {
+            if(i_save == 1) {
+              #causal_paths_variables[[i_paths_found]] <- list() # list for the variables
+              #causal_paths_coefs[[i_paths_found]] <- list() # list for the coefficients
+            }
+            causal_paths_variables[[i_paths_found]] <- current_path_variables[,1]
+            #if(i_save < nrow(current_path_variables)) {
+              #causal_paths_coefs[[i_paths_found]][[i_save]] <- current_path_coefs[i_save]
+            #}
+            
+          }
+          i_paths_found <- i_paths_found + 1 # level up i_paths_found for being ready to save next path
+        }
+      
+      }
+   
+      # calculate whole causal effect - direct and indirect
+      if(length(causal_paths_coefs) > 0) {
+        for (p in 1:length(causal_paths_coefs)) {
+          for (c in 1:length(causal_paths_coefs[[p]])) {
+            if(c == 1) {
+              calc_prod <- causal_paths_coefs[[p]][[c]]
+            } else {
+              calc_prod <- calc_prod*causal_paths_coefs[[p]][[c]]
+            }
+          }
+          if (p == 1) {
+            calc_paths <- matrix(nrow = length(causal_paths_coefs), ncol = 1)
+          } 
+          calc_paths[p] <- calc_prod
+        }
+        
+        causal_effects$CDE_and_CIE <- sum(calc_paths) # save whole causal effect in data.frame
+        causal_effects$CIE <- sum(calc_paths)-as.numeric(as.character(CDE$Coefficient)) # calculate and save the indirekt causal effect (whole - direct causal effect)
+      
+      } else {
+        causal_effects$CDE_and_CIE <- 0
+        causal_effects$CIE <- 0
+      }
+    
+
+    rm(i_paths_found)
+
+    
+    
+    
+    
+    
+    
+    
+# NON-CAUSAL PATHS
+    i_round <- 1
+    non_causal_effects <- matrix(nrow = 1, ncol = 3) %>% data.frame()
+    
+    #try(rm(non_causal_paths_ALL_variables))
+    
+    if(exists("non_causal_paths_ALL_variables") == FALSE) {
+      non_causal_paths_ALL_variables <- list()
+    }
+    # the algorithm has to check all causal paths from the parent of the variable exclusive the one going through the IV
+    
+    
+    if(length(parents_IV) > 0) { # check if there exist parent variables
+    
+    i_numpar <- 1
+      for (i_numpar in 1:length(parents_IV)) {
+        
+        #if(i_numpar == 2) {stop("control check")}
+        
+        i_paths_found <- 1
+        non_causal_paths_variables <- list()
+
+        if(as.character(parents_IV[i_numpar]) == DV) { # if the current parent variable equals the DV, skip this one and move on to the next one
+          non_causal_paths_ALL_variables[[i_numpar]] <- list(c(IV, DV)) # first value has to be in second row because IV was added in the first
+          i_paths_found <- i_paths_found + 1 # level up p for being ready to save next path
+          names(non_causal_paths_ALL_variables)[i_numpar] <- parents_IV[i_numpar]
+
+              
+          if(length(parents_IV) > i_numpar) {
+            i_numpar <- i_numpar + 1
+          } else {
+            break()
+          }
+        }
+    
+        X <- as.character(parents_IV[i_numpar])
+        
+        status <- "working"
+      
+        current_path_variables <- matrix(c(X, 1, TRUE, 0), 1, 4)
+        colnames(current_path_variables) <- c("Variable", "Currently_tested_child", "Backwards", "Currently_tested_parent")
+        
+
+        repeat{
+    
+          JUMP <- FALSE # set for leaving part of code out in case that parent path is followed
+      
+          if(length(children(causalgraph, X)) == 0 || X == DV) { # check if current variable has children and if it equals the dependent variable
+            w <- "Wait"
+            while(w == "Wait") {
+              if(length(children(causalgraph, X)) == current_path_variables[nrow(current_path_variables),2]) { # check if X = IV and all children were already used
+                
+                if(current_path_variables[nrow(current_path_variables), 3] == TRUE) { # is it allowed to follow the path backwards (so no collider is crossed)
+                  parents_X <- parents(causalgraph, X) # search for parent variables for the current X
+                  
+                  
+                  if(length(parents_X) > 0) { # check if there exist parent variables
+                    if(length(parents_X) > current_path_variables[nrow(current_path_variables), 4]) { # if so.. check if there are still parents that were not used yet
+                      
+                      current_path_variables[nrow(current_path_variables), 4] <- as.numeric(current_path_variables[nrow(current_path_variables), 4]) + 1 # lift parent number by one to include the next one in the analysis
+                      
+                      X <- parents_X[as.numeric(current_path_variables[nrow(current_path_variables), 4])]
+                      
+                      current_path_variables <- rbind(current_path_variables, c(X, 1, TRUE, 0)) # adding this new X to the currently followed path
+
+                      JUMP <- TRUE
+                      w <- "Go" # change to exit from loop
+                    } else if (nrow(current_path_variables) == 1) {
+                      JUMP = TRUE
+                      status <- "ready"
+                      break()
+                    }
+                    
+                  } else if (nrow(current_path_variables) == 1) {
+                    JUMP = TRUE
+                    status <- "ready"
+                    break()
+                  }  
+      
+                } else if (nrow(current_path_variables) == 1) {
+                  JUMP = TRUE
+                  status <- "ready"
+                  break()
+                }
+                
+              }
+              
+              if(nrow(current_path_variables) > 1) {
+                if(JUMP == FALSE) {
+                  current_path_variables <- matrix(current_path_variables[-nrow(current_path_variables), ], ncol = 4) # if it is not the IV, you move back to the previous parent variable...
+                  X <- current_path_variables[nrow(current_path_variables), 1] #... and define it again as the current variable
+
+                  if(length(children(causalgraph, X)) > as.numeric(current_path_variables[nrow(current_path_variables),2])) { # check if there are still other children of the variable that where not used yet
+                    w <- "Go" # change to exit from loop if other children are available; otherwise the procedure is repeated and the you go back again to the previous parent
+                  }
+                }
+              } 
+            }
+            if (JUMP == FALSE) {
+              current_path_variables[nrow(current_path_variables),2] <- c(as.numeric(as.character(current_path_variables[nrow(current_path_variables),2])) + 1)
+            }
+            
+          }
+      
+          if(status == "ready") {
+            if(length(non_causal_paths_variables) > 0) {
+              
+              non_causal_paths_ALL_variables[[i_numpar]] <- non_causal_paths_variables
+              if(length(parents_IV) > 0) {
+                names(non_causal_paths_ALL_variables)[i_numpar] <- parents_IV[i_numpar]
+              }
+            }
+            break()
+          }
+          
+          
+          if(X != DV) { # make sure that the target variable is not reached yet -> otherwise skip the next part of changing the current path and adding a new variable
+
+            X <- children(causalgraph, X)[[as.numeric(current_path_variables[nrow(current_path_variables), 2])]] # define the new X by taking the child of the current variable X
+            current_path_variables <- rbind(current_path_variables, c(X, 1, FALSE, 0)) # adding this new X to the currently followed path
+          }
+          
+          
+          
+          if(X == DV) { # save current path variables and the belonging path coefficients in two seperated lists
+            whole_current_path <- c(IV, current_path_variables[,1]) # all variable names of the current path for testing fo doubled use of one or more variable(s)
+            
+            if(any(duplicated(whole_current_path)) == FALSE) { # only save the path and coefficient if no variable is used twice
+              for (i_save in 1:nrow(current_path_variables)) {
+                
+                }
+                non_causal_paths_variables[[i_paths_found]] <- whole_current_path # first value has to be in second row because IV was added in the first
+                
+                i_paths_found <- i_paths_found + 1 # level up p for being ready to save next path
+                
+              }
+              
+            }
+            
+          } # end repeat
+
+          i_round <- i_round + 1
+
+    }
+
+      } # end if(length(parents_IV) > 0
+    }
+
+
+      
+  if(exists("non_causal_paths_ALL_variables") == FALSE) {
+    non_causal_paths_ALL_variables <- list()
+  }
+    
+  result <- list(causal_paths_variables, non_causal_paths_ALL_variables)
+  names(result) <-c("causal_paths", "non_causal_paths")
+  
+  output <- result
+
+}
