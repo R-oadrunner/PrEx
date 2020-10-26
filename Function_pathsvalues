@@ -1,0 +1,130 @@
+# calculate the paths between two specific variables
+
+pathsvalues <- function(causalpaths = NULL, noncausalpaths = NULL, pathcoefs = NULL, IV = NULL, DV = NULL) {
+
+  # install and load packages
+  packs_needed <- c("dagitty", "dplyr")
+  for (p in packs_needed)
+    if(!require(p, character.only = TRUE)) install.packages(p)
+    library(p, character.only = TRUE)
+  
+  rm(p)
+  rm(packs_needed)
+  
+  #try(rm(causal_effects))
+  
+  # set if causal or non-causal, IV and DV
+  
+  #dat <- Population_Dementia_logit
+  list_used <- causalpaths
+  
+  ALL_CP_coefs <- list_used
+    
+  if(IV != DV) {
+  
+    if(length(list_used) > 0) {
+      for(i_numpaths in 1:length(list_used)) {
+        for(i_numit in 1: (length(list_used[[i_numpaths]])-1)) {
+          h_parent <- list_used[[i_numpaths]][[i_numit]]
+          h_child <- list_used[[i_numpaths]][[i_numit+1]]
+          
+          if(i_numit == 1) {
+            h_coefcalc <- pathcoefs$C.stand[pathcoefs$parent == h_parent & pathcoefs$child == h_child] # take coef out of matrix belonging to the two variables
+          } else {
+            h_coef <- pathcoefs$C.stand[pathcoefs$parent == h_parent & pathcoefs$child == h_child]
+            h_coefcalc <- h_coefcalc*h_coef
+          }
+          
+        }
+        
+        ALL_CP_coefs[[i_numpaths]] <- list(ALL_CP_coefs[[i_numpaths]], h_coefcalc) # save path with belonging  path coefficient (multiplied)
+        
+        if(i_numpaths == 1) {
+          h_allpaths <- h_coefcalc
+        } else {
+          h_allpaths <- h_allpaths + h_coefcalc
+        }
+        
+      } # end for(i_numpaths in 1:length(list_used))
+    
+      
+      
+      
+      causal_effects <- h_allpaths
+
+      rm(h_allpaths)
+      
+    } else { # end if(length(list_used) > 0)
+      causal_effects <- 0
+    }        
+    
+    
+    
+    
+  } else { # end if(IV != DV)
+    causal_effects[IV, IV] <- 1
+  }
+
+  # calculate the paths
+  
+  
+  # set if causal or non-causal, IV and DV
+  
+  #dat <- Population_Dementia_logit
+  list_used <- noncausalpaths <- non_causal_paths
+  
+  ALL_nCP_coefs <- list_used
+    
+ 
+  if(IV != DV) {
+    if(length(list_used) > 0) {
+  
+    for(i_parpaths in 1:length(list_used)) {
+      if(length(list_used[[i_parpaths]]) > 0) {
+        for(i_numpaths in 1:length(list_used[[i_parpaths]])) {
+          for(i_numit in 1: (length(list_used[[i_parpaths]][[i_numpaths]])-1)) {
+            
+              h_parent <- list_used[[i_parpaths]][[i_numpaths]][[i_numit]]
+              h_child <- list_used[[i_parpaths]][[i_numpaths]][[i_numit+1]]
+              
+              if(i_numit == 1) {
+                h_coefcalc <- pathcoefs$C.stand[(pathcoefs$parent == h_parent & pathcoefs$child == h_child) | (pathcoefs$parent == h_child & pathcoefs$child == h_parent)] # take coef out of matrix belonging to the two variables (direction (which is parent, which child) unclear, must check both)
+              } else {
+                h_coef <- pathcoefs$C.stand[(pathcoefs$parent == h_parent & pathcoefs$child == h_child) | (pathcoefs$parent == h_child & pathcoefs$child == h_parent)]
+                h_coefcalc <- h_coefcalc*h_coef
+              }
+            
+          } # end for(i_numit in 1: (length(list_used[[i_parpaths]][[i_numpaths]])-1))
+          
+          ALL_nCP_coefs[[i_parpaths]][[i_numpaths]] <- list(ALL_nCP_coefs[[i_parpaths]][[i_numpaths]], h_coefcalc) # save path with belonging  path coefficient (multiplied)
+          
+          if(i_numpaths == 1 & exists("h_allpaths") == FALSE) {
+            h_allpaths <- h_coefcalc
+          } else {
+            h_allpaths <- h_allpaths + h_coefcalc
+          }
+          
+        } # end for(i_numpaths in 1:length(list_used[[i_parpaths]]))
+      
+        
+        
+      } # end if(length(list_used[[i_parpaths]]) > 0)
+    } # end for(i_parpaths in 1:length(list_used))
+
+    non_causal_effects <- h_allpaths
+
+    rm(h_allpaths)   
+        
+    
+  } else { # for(i_parpaths in 1:length(list_used))
+    non_causal_effects <- 0
+  }
+    
+  } # end if(IV != DV)
+
+  result <- list(ALL_CP_coefs, causal_effects, ALL_nCP_coefs, non_causal_effects)
+  names(result) <- c("causal_paths", "whole_causal", "non_causal_paths", "whole_non_causal")
+  
+  output <- result
+
+}
