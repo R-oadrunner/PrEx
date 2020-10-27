@@ -1,0 +1,385 @@
+# function for comparing the regression methods
+
+Method_comparison <- function(N_sample = 1L, data = NULL, causalgraph = NULL, h_rep_test = 5L, h_rep_pred.error = 5L, N_pred.error = 100L, outloop = 5L, inloop = 5, dependent_variable = NULL, independent_variables = NULL, true_causals = NULL) {
+  
+  packs_needed <- c("dagitty") # "HyperbolicDist"
+  for (p in packs_needed)
+  if(!require(p, character.only = TRUE)) install.packages(p)
+  library(p, character.only = TRUE)
+  
+  rm(p)
+  rm(packs_needed)
+  
+  # define a set of data in workspace to keep when rest is deleted regularly
+  
+  data_set <- data
+  
+  # add ID to data_set
+  data_set <- cbind(c(1:nrow(data_set)), data_set) # add an ID column
+  colnames(data_set)[1] <- "ID"
+  
+  
+  
+  # set set.seed vectors for repetition possibility
+  seed_rep_test <- sample(c(1:500000), h_rep_test, replace = FALSE, set.seed(32))
+  seed_rep_pred.error <- sample(c(1:500000), h_rep_pred.error, replace = FALSE, set.seed(8))
+  
+  
+  # standardize causal regression coefficients
+  
+  true_causals_stand <- true_causals
+  
+  for(i_indvar in 1:nrow(true_causals_stand)) {
+    true_causals_stand[i_indvar,] <- (true_causals_stand[i_indvar,])*(sd(data_set[,rownames(true_causals_stand)[i_indvar]]) / sd(data_set[,dependent_variable])) # standardize true values
+  }
+  
+  rm(i_indvar)
+  
+  packs_needed <- c("dagitty", "glmnet", "caret", "dplyr", "stringr", "car", "mosaic") # "HyperbolicDist"
+  for (p in packs_needed)
+  if(!require(p, character.only = TRUE)) install.packages(p)
+  library(p, character.only = TRUE)
+  
+  rm(p)
+  rm(packs_needed)
+  
+  
+  for(i_rep_test in 1:h_rep_test) {
+  
+    # subset the variables to the ones defined before to use in calculations
+    
+    data_subset <- data.frame(data_set$ID, data_set[,colnames(data_set) == dependent_variable]) # save dependent variable in dat (the data set used for further calculations)
+    
+    for(i_indvar in 1: length(independent_variables)) {
+      data_subset <- cbind(data_subset, data_set[,colnames(data_set) == independent_variables[i_indvar]])
+    }
+    
+    colnames(data_subset) <- c("ID", dependent_variable, c(independent_variables))
+    
+    # name dependant variable in data set as DV
+    names(data_subset)[names(data_subset) == dependent_variable] <- "DV"
+    
+    sample_ID <- sample(data_subset[,1], N_sample, replace = FALSE, set.seed(seed_rep_test[i_rep_test])) # sample IDs of population
+    sample_Pop <- subset(data_subset, ID%in%sample_ID) # take subset with sampled IDs out of the population
+    
+    if(length(independent_variables) == 1) {
+      sample_Pop_ZERO <- data.frame(sample_Pop, 0) 
+      colnames(sample_Pop_ZERO)[ncol(sample_Pop_ZERO)] <- c("ZERO")
+      dat_ZERO <- sample_Pop_ZERO
+    } else if(length(independent_variables) == 0) {
+      stop("No independent variable(s) selected")
+    }
+    
+    dat <- sample_Pop
+    
+    
+    # create a list with all outloops and inloops containing the ID
+    # out_folds has IDs of the people in the TRAINING set in the outer loop
+    # all_folds has for each of the outloop folds the IDs which are in the TESTING set of that fold
+    
+    # create outer folds
+    
+    set.seed(49)
+    outloop_folds <- createFolds(dat[,1], k = outloop, list = TRUE, returnTrain = TRUE)
+    all_folds <- outloop_folds
+    
+    
+    for(i_lisoloop in 1:length(outloop_folds)) {
+      outloop_folds[[i_lisoloop]] <- dat$ID[outloop_folds[[i_lisoloop]]] # take the ID of the people in the folds out of the data set
+    
+      all_folds[[i_lisoloop]] <- createFolds(outloop_folds[[i_lisoloop]], k = inloop, list = TRUE, returnTrain = FALSE) # create inner folds
+      
+      for(i_lisil in 1:length(all_folds[[i_lisoloop]])) {
+        all_folds[[i_lisoloop]][[i_lisil]] <- outloop_folds[[i_lisoloop]][all_folds[[i_lisoloop]][[i_lisil]]] # take the IDs from outloop_folds that belong in th test set
+      }
+      
+    }
+    
+    # Ridge: build matrix for results
+    results_ridge <- matrix(nrow = outloop, ncol = 4) %>% data.frame()
+    colnames(results_ridge) <- c("RID_lambda.min", "RID_pred.error.min", "RID_lambda.1se", "RID_pred.error.1se")
+    
+    for (i_ol in 1:outloop) {
+    
+      outloop_train_subjects <- outloop_folds[[i_ol]] # save all IDs in outloop training set
+      outloop_test_subjects <- dat$ID[!dat$ID%in%(outloop_folds[[i_ol]])] # save all IDs that are NOT in outloop training set as test set
+      outloop_train_data <- subset(dat, ID%in%outloop_train_subjects) # save the data belonging to the IDs
+      outloop_test_data <- subset(dat, ID%in%outloop_test_subjects) # save the data belonging to the IDs
+      
+      outloop_train_data <- subset(outloop_train_data, select = -c(ID)) # cut the column ID for the calculation
+      outloop_train_data_DV <- outloop_train_data$DV # save vector of dependent variable for controlling with prediciton made by model(s)
+  
+      outloop_test_data <- subset(outloop_test_data, select = -c(ID)) # cut the column ID for the calculation
+      outloop_test_data_DV <- outloop_test_data$DV # save vector of dependent variable for controlling with prediciton made by model(s)
+  
+      
+      # for ZERO added if univariate
+      if(length(independent_variables) == 1) {
+        outloop_train_data_ZERO <- subset(dat_ZERO, ID%in%outloop_train_subjects) # save the data belonging to the IDs
+        outloop_train_data_ZERO <- subset(outloop_train_data_ZERO, select = -c(ID)) # cut the column ID for the calculation
+        outloop_test_data_ZERO <- subset(dat_ZERO, ID%in%outloop_test_subjects) # save the data belonging to the IDs
+        outloop_test_data_ZERO <- subset(outloop_test_data_ZERO, select = -c(ID)) # cut the column ID for the calculation
+      }
+      
+      # Ridge Regression
+      
+      fold_id <- matrix(outloop_folds[[i_ol]]) # set fold_id for ridge regression
+      
+      # Create training and testing feature model matrices and response vectors
+      # Model.matrix(...) [,-1] to discard the intercept
+      
+      if(length(independent_variables) == 1) {
+        x_train_matrix <- model.matrix(DV ~ ., outloop_train_data_ZERO) [, -1]
+        x_test_matrix <- model.matrix(DV ~ ., outloop_test_data_ZERO) [, -1]
+      } else {
+        x_train_matrix <- model.matrix(DV ~ ., outloop_train_data) [, -1]
+        x_test_matrix <- model.matrix(DV ~ ., outloop_test_data) [, -1]
+      }
+      
+      y_train <- outloop_train_data_DV
+      y_test <- outloop_test_data_DV
+         
+      for (i_il in 1:inloop) {
+        
+        # Ridge Regression -> create foldid which is taken from the former created fold list (all_folds)
+        fold_id[fold_id%in%all_folds[[i_ol]][[i_il]]] <- paste("id", i_il, sep = "")
+        
+      }
+      
+      # regularized regression (Ridge) with the cv.glmnet function
+      
+      fold_id <- str_remove(fold_id, "id") %>% as.numeric
+      
+      cv_ridge <- cv.glmnet(x = x_train_matrix, y = y_train, alpha = 0, nfold = inloop, foldid = fold_id)
+    
+      # get a model with the 95th percentile lambda chosen for the minimal MSE
+      ridge.min_model <- glmnet(x = x_train_matrix, y = y_train, alpha = 0, lambda = cv_ridge$lambda.min)
+      pred_ridge.min <- ridge.min_model %>% predict(x_test_matrix) %>% as.vector() # prediction
+  
+      results_ridge[i_ol, "RID_lambda.min"] <- cv_ridge$lambda.min # lambda for minimal MSE
+      results_ridge[i_ol, "RID_pred.error.min"] <- mean((y_test - pred_ridge.min)^2) # prediction error
+      
+      # get a model with the 95th percentile lambda chosen within one standard error
+      ridge.1se_model <- glmnet(x = x_train_matrix, y = y_train, alpha = 0, lambda = cv_ridge$lambda.1se)
+      pred_ridge.1se <- ridge.1se_model %>% predict(x_test_matrix) %>% as.vector() # prediction
+  
+      results_ridge[i_ol, "RID_lambda.1se"] <- cv_ridge$lambda.1se # lambda within one standard error
+      results_ridge[i_ol, "RID_pred.error.1se"] <- mean((y_test - pred_ridge.1se)^2) # prediciton error
+    
+      
+      # multiple linear regression in the outloop fold
+      lm_cv <- lm(DV ~ ., outloop_train_data) # 
+      pred_lm <- lm_cv %>% predict(outloop_test_data) %>% as.vector()
+      pred.error_lm <- mean((outloop_test_data_DV - pred_lm)^2)
+        
+      
+      if (i_ol == 1) {
+        sum_pred.errors <- matrix(nrow = 1, ncol = inloop)
+      }
+      sum_pred.errors[,i_ol] <- pred.error_lm
+    
+      if (i_ol == 1) {
+        sum_lim_cv <- list(lm_cv)
+      } else {
+        sum_lim_cv <- append(sum_lim_cv, list(lm_cv))
+      }
+      
+    } # end i_ol outloop
+    
+    
+    # RIDGE: PREDICTING FINAL MODEL
+    
+    # get lambda value belonging to best working model
+    h_colnumber <- 4 # 4 for 1se and 2 for min
+    h_rownumber <- rownames(results_ridge)[results_ridge[,h_colnumber] == min(results_ridge[,h_colnumber])] # look for cv fold with least prediction error
+    model_lambda <- results_ridge[h_rownumber, (h_colnumber-1)] # lambda of best model
+    
+    # create final model
+    if(length(independent_variables) == 1) {
+      ridge_best.model_data <- subset(dat_ZERO, select = -c(ID))
+    } else {
+      ridge_best.model_data <- subset(dat, select = -c(ID))
+    }
+    
+    #ridge_best.model_data <- subset(dat, select = -c(ID))
+    x_total_matrix <- model.matrix(DV ~ ., ridge_best.model_data) [,-1]
+    y_total <- ridge_best.model_data$DV
+    model_ridge <- glmnet(x = x_total_matrix, y = y_total, alpha = 0, lambda = model_lambda)
+    
+    # show coefs of best model
+    ridge_model_coefs.values <- coef(model_ridge) %>% as.vector()
+    
+    
+    if(length(independent_variables) == 1) {
+      names(ridge_model_coefs.values) <- c("Intercept", colnames(dat_ZERO)[3:ncol(dat_ZERO)])
+      ridge_model_coefs.values <- ridge_model_coefs.values[-which(ridge_model_coefs.values == ridge_model_coefs.values["ZERO"])]
+    } else {
+      names(ridge_model_coefs.values) <- c("Intercept", colnames(dat)[3:ncol(dat)])
+    }
+    
+    
+    # multiple linear regression
+    idx <- which(sum_pred.errors == min(sum_pred.errors), arr.ind=TRUE) %>% data.frame() # in lm in crossvalidation with minimal prediction error
+    model_lm_normal <- lm(DV ~ ., dat[,-1])
+    model_lm_cross.validation <- sum_lim_cv[[idx$col]]
+    
+    compare_coefs <- data.frame(coef(model_lm_normal)[-1], coef(model_lm_cross.validation)[-1], ridge_model_coefs.values[-1])
+    colnames(compare_coefs) <- c("lm_normal", "lm_cv", "ridge")
+    
+   
+    # standardize regression coefficients for comparison
+    compare_coefs_stand <- compare_coefs
+    
+    for(i_indvar in 1:nrow(compare_coefs_stand)) {
+      compare_coefs_stand[i_indvar,] <- (compare_coefs[i_indvar,])*(sd(sample_Pop[,rownames(compare_coefs)[i_indvar]]) / sd(sample_Pop$DV)) # standardize sample values
+    }
+    
+    rm(i_indvar)
+    
+    compare_coefs <- cbind(compare_coefs, true_causals)
+    colnames(compare_coefs)[ncol(compare_coefs)] <- "true_value"
+    compare_coefs_stand <- cbind(compare_coefs_stand, true_causals_stand)
+    colnames(compare_coefs_stand)[ncol(compare_coefs_stand)] <- "true_value"
+    
+    coefs_stand <- compare_coefs_stand
+    
+    # now calculate mean deviation from true value and deviation for coefficient Hearing impairment
+    
+    devq_mean <- rep(NA, nrow(compare_coefs_stand)) # for quadratic deviation
+    devq_HI <- rep(NA, nrow(compare_coefs_stand))
+    devq_HI_beta <- rep(NA, nrow(compare_coefs))
+    
+    devd_mean <- rep(NA, nrow(compare_coefs_stand)) # bias, deviation only
+    devd_HI <- rep(NA, nrow(compare_coefs_stand))
+    devd_HI_beta <- rep(NA, nrow(compare_coefs))
+    
+    
+    for(i_met in 1:(ncol(compare_coefs_stand)-1)) {
+      devq_mean[i_met] <- mean((compare_coefs_stand[,i_met] - compare_coefs_stand$true_value)^2)
+      devq_HI[i_met] <- (compare_coefs_stand["Hearing_impairment", i_met] - compare_coefs_stand["Hearing_impairment", "true_value"])^2
+      devq_HI_beta[i_met] <- (compare_coefs["Hearing_impairment", i_met] - compare_coefs["Hearing_impairment", "true_value"])^2
+      
+      devd_mean[i_met] <- mean(compare_coefs_stand[,i_met] - compare_coefs_stand$true_value)
+      devd_HI[i_met] <- (compare_coefs_stand["Hearing_impairment", i_met] - compare_coefs_stand["Hearing_impairment", "true_value"])
+      devd_HI_beta[i_met] <- (compare_coefs["Hearing_impairment", i_met] - compare_coefs["Hearing_impairment", "true_value"])
+    }
+    devq_mean <- c(devq_mean, NA)
+    devq_HI <- c(devq_HI, NA)
+    devq_HI_beta <- c(devq_HI_beta, NA)
+    devd_mean <- c(devd_mean, NA)
+    devd_HI <- c(devd_HI, NA)
+    devd_HI_beta <- c(devd_HI_beta, NA)
+    
+    
+    compare_coefs_stand <- rbind(compare_coefs_stand, devq_mean, devq_HI, devd_mean, devd_HI) # add two rows
+    rownames(compare_coefs_stand)[(nrow(compare_coefs_stand)-3):nrow(compare_coefs_stand)] <- c("devq_mean", "devq_HI", "devd_mean", "devd_HI")
+    
+    compare_coefs <- rbind(compare_coefs, devq_HI_beta, devd_HI_beta) # add two rows
+    rownames(compare_coefs)[(nrow(compare_coefs)-1):nrow(compare_coefs)] <- c("devq_HI", "devd_HI")
+    
+    if(i_rep_test == 1) {
+      COEFq_mandsd <- matrix(ncol = 9, nrow = h_rep_test) %>% data.frame()
+      colnames(COEFq_mandsd) <- c("dev_mean_lm_normal", "dev_mean_lm_cv", "dev_mean_ridge", "dev_HI_lm_normal", "dev_HI_lm_cv", "dev_HI_ridge", "dev_HI_beta_lm_normal", "dev_HI_beta_lm_cv", "dev_HI_beta_ridge")
+      COEFd_mandsd <- COEFq_mandsd
+      regr_coefs_stand <- matrix(ncol = 4, nrow =  h_rep_test) %>% data.frame()
+      colnames(regr_coefs_stand) <- c("lm_normal", "lm_cv", "ridge", "true_value")
+    
+    }
+    
+    COEFq_mandsd[i_rep_test, 1:3] <- data.frame(t(compare_coefs_stand))$devq_mean[1:3] # fill in the mean deviation for each method
+    COEFq_mandsd[i_rep_test, 4:6] <- data.frame(t(compare_coefs_stand))$devq_HI[1:3] # fill in the deviation of HI for each method
+    COEFq_mandsd[i_rep_test, 7:9] <- data.frame(t(compare_coefs))$devq_HI[1:3] # fill in the not standardized deviation of HI for each method
+    
+    COEFd_mandsd[i_rep_test, 1:3] <- data.frame(t(compare_coefs_stand))$devd_mean[1:3] # fill in the mean deviation for each method
+    COEFd_mandsd[i_rep_test, 4:6] <- data.frame(t(compare_coefs_stand))$devd_HI[1:3] # fill in the deviation of HI for each method
+    COEFd_mandsd[i_rep_test, 7:9] <- data.frame(t(compare_coefs))$devd_HI[1:3] # fill in the not standardized deviation of HI for each method
+    
+    regr_coefs_stand[i_rep_test, 1:4] <- coefs_stand["Hearing_impairment",]
+  
+    # calculate prediction error on a new sample
+    
+    results_pred.error <- matrix(nrow = h_rep_pred.error, ncol = 3) %>% data.frame()
+    colnames(results_pred.error) <- c("lm_normal", "lm_cv", "ridge")
+    
+    for(i_rep_pred.error in 1:h_rep_pred.error) {
+      sample_ID_pred.error <- sample(data_subset[,1], N_pred.error, replace = FALSE, set.seed(seed_rep_pred.error[i_rep_pred.error])) # sample IDs of population
+      sample_Pop_pred.error <- subset(data_subset, ID%in%sample_ID_pred.error) # take subset with sampled IDs out of the population
+      x_to_predict <- subset(sample_Pop_pred.error, select = -c(ID))
+    
+      if(length(independent_variables) == 1) {
+        sample_Pop_pred.error_ZERO <- data.frame(sample_Pop_pred.error, 0) 
+        colnames(sample_Pop_pred.error_ZERO)[ncol(sample_Pop_pred.error_ZERO)] <- c("ZERO")
+        x_to_predict_ZERO <- subset(sample_Pop_pred.error_ZERO, select = -c(ID))
+        x_matrix <- model.matrix(DV ~ ., x_to_predict_ZERO) [, -1]
+      } else {
+        x_matrix <- model.matrix(DV ~ ., x_to_predict) [, -1]
+      }
+      
+      
+      y_test <- sample_Pop_pred.error$DV
+      
+      h_pred <- model_lm_normal %>% predict(x_to_predict) %>% as.vector() # prediction
+      results_pred.error$lm_normal[i_rep_pred.error] <- mean((y_test - h_pred)^2) # prediction error
+      
+      h_pred <- model_lm_cross.validation %>% predict(x_to_predict) %>% as.vector() # prediction
+      results_pred.error$lm_cv[i_rep_pred.error] <- mean((y_test - h_pred)^2) # prediction error
+      
+      h_pred <- model_ridge %>% predict(x_matrix) %>% as.vector() # prediction
+      results_pred.error$ridge[i_rep_pred.error] <- mean((y_test - h_pred)^2) # prediction error
+      
+    }
+    
+    # add row with mean and sd of pred.error for each method
+    
+    mean <- matrix(nrow = 1, ncol = 3) %>% data.frame()
+    colnames(mean) <- c("lm_normal", "lm_cv", "ridge")
+    
+    sd <- matrix(nrow = 1, ncol = 3) %>% data.frame()
+    colnames(sd) <- c("lm_normal", "lm_cv", "ridge")
+    
+    for(i_meth in 1:ncol(results_pred.error)) {
+      mean[1, i_meth] <- mean(results_pred.error[,i_meth])
+      sd[1, i_meth] <- sd(results_pred.error[,i_meth])
+    }
+    
+    h_work <- rbind(results_pred.error, mean, sd)
+    rownames(h_work) <- c(rownames(results_pred.error), "mean", "sd")
+    results_pred.error <- h_work
+    rm(h_work)
+    
+  
+    if(i_rep_test == 1) {
+      PE_mandsd <- matrix(ncol = 6, nrow = h_rep_test) %>% data.frame()
+      colnames(PE_mandsd) <- c("mean_lm_normal", "mean_lm_cv", "mean_ridge", "sd_lm_normal", "sd_lm_cv", "sd_ridge")
+    
+    }
+    
+    PE_mandsd[i_rep_test, 1:3] <- data.frame(t(results_pred.error))$mean # fill in the mean PE for each method
+    PE_mandsd[i_rep_test, 4:6] <- data.frame(t(results_pred.error))$sd # fill in the sd of PE for each method
+    
+
+  } # end for loop i_rep_test
+  
+  
+  sd_d <- matrix(ncol = ncol(COEFd_mandsd), nrow = 1)
+  sd_q <- matrix(ncol = ncol(COEFq_mandsd), nrow = 1)
+  
+  for(i_sd in 1:length(sd_d)) {
+    sd_d[1, i_sd] <- sd(COEFd_mandsd[,i_sd])
+    sd_q[1, i_sd] <- sd(COEFq_mandsd[,i_sd])
+  }
+  
+  meanSd_COEF_qd <- rbind(colMeans(as.matrix(COEFd_mandsd)), sd_d, colMeans(as.matrix(COEFq_mandsd)), sd_q) # bind the mean and the standard deviation of the quadratic and non quadratic deviations from true causal effects
+  
+  colnames(meanSd_COEF_qd) <- colnames(COEFq_mandsd)
+  rownames(meanSd_COEF_qd) <- c("deviation_mean", "deviation_sd", "quadratic_mean", "quadratic_sd")
+  
+  # save final output given by function
+    
+  res_methods <- list(COEFd_mandsd[,7:9], COEFd_mandsd[,4:6], PE_mandsd, regr_coefs_stand)
+  names(res_methods) <- c("Bias_deviation", "Bias_deviation_stand", "Prediction_error", "Regr_coefs_stand")
+  
+  
+
+  res_methods
+}
