@@ -1,0 +1,425 @@
+# Analysis to get the sets for the analysis of the strength of undcontrolled confounding and the belonging values
+
+packs_needed <- c("dagitty", "dplyr", "mosaic", "rlist", "parallel", "future.apply", "stringr")
+for (p in packs_needed)
+  if(!require(p, character.only = TRUE)) install.packages(p)
+  library(p, character.only = TRUE)
+
+rm(p)
+rm(packs_needed)
+
+
+# quantify confounding by summing all open back-door paths for a specific set of variables
+
+dependent_variable <- "Dementia"
+independent_variable <- "Hearing_impairment"
+variables_names <- colnames(Population_Dementia_logit)
+
+# first save all available paths 
+list_used <- ALL_paths_coefficients[[independent_variable]][[dependent_variable]][["non_causal_paths"]]
+conf_paths <- c()
+
+for(i_par in 1:length(list_used)) {
+  conf_paths <- c(conf_paths, list_used[[i_par]])
+}
+rm(i_par)
+
+save(conf_paths, file = "conf_paths.RData")
+
+
+confounding_variables <- c()
+conf_paths_only <- list()
+
+for(i_paths in 1:length(conf_paths)) {
+  if(sum(variables_names %in% conf_paths[[i_paths]][[1]]) != 0) { # see if there are any variables in the path (should be)
+    h_varpath <- variables_names[variables_names %in% conf_paths[[i_paths]][[1]]] # save those variables
+    confounding_variables <- c(confounding_variables, h_varpath[h_varpath %notin% confounding_variables]) # save those of them which are not yet in the vector to avoid doubles
+  }
+}
+rm(h_varpath)
+
+h_DemCP <- paths(Dem_Pop, from = "Hearing_impairment", to = "Dementia", Z = list(), limit = 100, directed = TRUE)$paths # all causal paths between HI and Dem
+Dem_causal_paths <- c()
+
+for(i_causpaths in 1:length(h_DemCP)) {
+  Dem_causal_paths <- c(Dem_causal_paths, strsplit(h_DemCP[i_causpaths], split = " -> ", fixed = TRUE)[[1]]) # save them in a normal vector
+}
+rm(h_DemCP)
+
+confounding_variables <- confounding_variables[confounding_variables %notin% Dem_causal_paths] # all variables ONLY on back-door paths, not on causal paths
+
+save(confounding_variables, file = "confounding_variables.RData")
+
+
+detectCores()
+plan(multiprocess) ## => parallelize on your local computer
+
+
+`%notin%` <- Negate(`%in%`) # to get variables NOT included in mediation (causal paths)
+confounding_varSets <- list()
+list_conf_var_sets <- list()
+h_varcomb <- 0 # number of variable sets
+
+  
+list_conf_all <- future_lapply(confounding_variables, function(x) {
+
+CV <- x
+  other_variables <- CV
+
+  h_varcomb <- h_varcomb + 1
+  list_conf_var_sets[[h_varcomb]] <- other_variables
+  h_round <- 0
+  list_CVL <- list()
+  list_h_ropa <- c()
+  
+repeat{
+
+# get all open back-door paths between HI and Dem with this certain set of variables
+  h_paths <- 0
+  conf_paths_subset <- list()
+  for(i_paths in 1:length(conf_paths)) { # first check open paths
+    if(sum(other_variables %in% conf_paths[[i_paths]][[1]]) == 0) { # check every path if it is blocked by any variable in the model
+      h_paths <- h_paths + 1
+      conf_paths_subset[[h_paths]] <- conf_paths[[i_paths]]
+    }
+  }
+  
+  if(length(conf_paths_subset) != 0) { # look if there are variables left to close any still open path
+    
+  # all current confounding variables except for those already in the model and HI and Dem
+  current_conf <- confounding_variables[-which(confounding_variables %in% other_variables)]
+  
+  # get the names of all variables that lie on any of the open back-door paths belonging to the current set of variables
+  conf_vars_left <- c()
+  for(i_paths in 1:length(conf_paths_subset)) { # then check which variables are on this paths and therefore are able to close other left paths
+    if(sum(current_conf %in% conf_paths_subset[[i_paths]][[1]]) != 0) { # see if there are any variables in the path (should be)
+      h_varpath <- current_conf[current_conf %in% conf_paths_subset[[i_paths]][[1]]] # save those variables
+      conf_vars_left <- c(conf_vars_left, h_varpath[h_varpath %notin% conf_vars_left]) # save those of them which are not yet in the vector to avoid doubles
+    }
+  }
+
+  varlist <- c(conf_vars_left) #[conf_vars_left != independent_variable & conf_vars_left != dependent_variable])
+  
+  h_round <- h_round + 1
+  list_CVL[[h_round]]  <- varlist # add the current variables to a list for the back-and-forth-process
+  
+  h_ropa <- 1
+  list_h_ropa <- c(list_h_ropa, h_ropa) # this set of variables get an own h_ropa set to zero as non of the following variables was chosen yet
+  other_variables <- c(other_variables, varlist[h_ropa]) #  and if so add it to the current set of variables
+  h_varcomb <- h_varcomb + 1 # add 1 because another variable combination set was found which needs to be added
+  list_conf_var_sets[[h_varcomb]] <- other_variables # add this variable set to the list of variable sets
+  } else {
+    
+    got_something <- FALSE
+    zero_h_round <- FALSE
+    while (got_something == FALSE & zero_h_round == FALSE) { # check until you got a new set of variable or tested all
+      
+     list_h_ropa[h_round] <- h_ropa <- list_h_ropa[h_round] + 1 # add one for knowing which variable of the set is next (if this one exists)
+
+      if(length(list_CVL[[h_round]]) >= h_ropa) { # check if there is still a variable not used yet
+        
+        while(length(list_CVL[[h_round]]) >= h_ropa) {
+          if(list_CVL[[h_round]][h_ropa] %notin% other_variables) { # check if this variable is already in the path
+            other_variables <- other_variables[-length(other_variables)] # delete last variable from the current list
+            other_variables <- c(other_variables, list_CVL[[h_round]][h_ropa]) # add the new variable to the list
+            h_varcomb <- h_varcomb + 1 # add 1 because another variable combination set was found which needs to be added
+            list_conf_var_sets[[h_varcomb]] <- other_variables # add this variable set to the list of variable sets
+            got_something <- TRUE
+            break() # the goal is to go back to the beginning to select new beginning variable of the confounding_variables vector
+          } else {
+            h_ropa <- list_h_ropa[h_round] + 1 # add one for knowing which variable of the set is next (if this one exists)
+            list_h_ropa[h_round] <- h_ropa # replace the h_ropa belonging to that list of variables
+          }
+        }
+        break() # the goal is to go back to the beginning to select new beginning variable of the confounding_variables vector
+      } else if (h_round > 1) { # if all variables of that set were used, go one step back to the previous set of variables
+        h_round <- h_round - 1 # go back to previous set
+        other_variables <- other_variables[-length(other_variables)] # delete last variable from the current list
+        list_h_ropa <- list_h_ropa[-length(list_h_ropa)] # delete last value because it is non needed anymore
+      } else {
+        h_round <- h_round - 1
+        zero_h_round <- TRUE
+      }
+     
+
+    } # end while(got_something == FALSE)
+
+    if(h_round == 0) {
+      break()
+    } # the goal is to go back to the beginning to select new beginning variable of the confounding_variables vector
+  } # end else -> either h_round = 0 or having found another variable set to continue with
+
+
+  if(h_round == 0) {
+    break()
+  } # the goal is to go back to the beginning to select new beginning variable of the confounding_variables vector
+  
+} # end loop for one first variable ("repeat")
+
+list_conf_var_sets
+
+})
+
+
+save(list_conf_all, file = "list_conf_all.RData")
+
+
+
+plan(multiprocess) ## => parallelize on local computer
+
+options(future.globals.maxSize= 89128960000)
+
+list_conf_subset <- future_lapply(list_conf_all, function(x) {
+  
+list_conf_var_sets <- x
+
+for(i_confpaths in seq_along(list_conf_var_sets)) {
+  save <- TRUE
+  if(length(confounding_varSets) != 0) {
+    X <- list_conf_var_sets[[i_confpaths]]
+    if(length(list.search(confounding_varSets, expr = (sum(X %in% .) == length(X) & length(.) == length(X)))) != 0) { # check if this path already exists in there
+      save <- FALSE # if it does, it won't be saved
+    }
+  }
+  if(save == TRUE) {
+    confounding_varSets[[length(confounding_varSets)+1]] <- list_conf_var_sets[[i_confpaths]]
+  }
+  
+}
+
+confounding_varSets
+
+})
+
+
+# compare all sets left to get a final list with no doubled combinations
+
+confounding_varSets_final <- list()
+
+for(i_confset in seq_along(list_conf_subset)) {
+  for(i_confpaths in seq_along(list_conf_subset[[i_confset]])) {
+    save <- TRUE
+    if(length(confounding_varSets_final) != 0) {
+      X <- list_conf_subset[[i_confset]][[i_confpaths]]
+      if(length(list.search(confounding_varSets_final, expr = (sum(X %in% .) == length(X) & length(.) == length(X)))) != 0) { # check if this path already exists in there
+        save <- FALSE # if it does, it won't be saved
+      }
+    }
+    if(save == TRUE) {
+      confounding_varSets_final[[length(confounding_varSets_final)+1]] <- list_conf_subset[[i_confset]][[i_confpaths]]
+    }
+  }
+  
+  
+}
+
+
+
+# quantify confounding by summing all open back-door paths for a specific set of variables
+
+conf_varSets <- c(list("NONE"), confounding_varSets_final)
+
+confounding_varSets_values <- conf_varSets
+confounding_values <- c()
+
+for(i_conpaths in 1:length(conf_varSets)) {
+    
+  other_variables <- conf_varSets[[i_conpaths]]
+  
+  conf_paths_subset <- list()
+  h_paths <- 0 # to be added by one for every non-blocked path for including in the list
+  
+  
+  for(i_paths in 1:length(conf_paths)) {
+    if(sum(other_variables %in% conf_paths[[i_paths]][[1]]) == 0) { # check every path if it is blocked by any variable in the model
+      h_paths <- h_paths + 1
+      conf_paths_subset[[h_paths]] <- conf_paths[[i_paths]]
+      
+    }
+  }
+  
+  sum_nc <- 0
+  
+  if(length(conf_paths_subset) != 0) {
+    for(i_paths in 1:length(conf_paths_subset)) {
+      if(i_paths == 1) {
+        sum_paths <- conf_paths_subset[[i_paths]][[2]]
+      } else {
+        sum_paths <- sum_paths + conf_paths_subset[[i_paths]][[2]]
+      }
+    }
+    sum_nc <- sum_nc + sum_paths
+  } else {
+    sum_nc <- 0
+  }
+  
+  confounding_varSets_values[[i_conpaths]] <- list(confounding_varSets_values[[i_conpaths]], sum_nc)
+  confounding_values[i_conpaths] <- sum_nc
+  
+}
+
+
+# drop combinations with same confounding value
+
+confounding_varSets_values_subset <- list()
+confounding_values_subset <- c()
+
+
+for(i_confpaths in seq_along(confounding_varSets_values)) {
+  save <- TRUE
+  if(length(confounding_values_subset) != 0) {
+    X <- confounding_varSets_values[[i_confpaths]][[2]]
+    if(X %in% confounding_values_subset) { # check if this path already exists in there
+      save <- FALSE # if it does, it won't be saved
+    }
+  }
+  if(save == TRUE) {
+    confounding_varSets_values_subset[[length(confounding_varSets_values_subset)+1]] <- confounding_varSets_values[[i_confpaths]]
+    confounding_values_subset[length(confounding_values_subset)+1] <- confounding_varSets_values[[i_confpaths]][[2]]
+  }
+}
+
+
+# group the confoundings by their values
+
+conf_val_sort <- cbind(sort(confounding_values_subset), NA, NA) %>% data.frame()
+colnames(conf_val_sort) <- c("value", "value_round", "group")
+
+range(conf_val_sort$value)
+
+conf_val_sort$value_round <- round(conf_val_sort$value, 3)
+conf_val_sort$group <- round(conf_val_sort$value, 3)
+
+
+# with rounded values -> same round, same group
+
+h_groups <- 1
+
+repeat {
+
+  conf_val_sort$group[conf_val_sort$group == min(as.numeric(conf_val_sort$group), na.rm = TRUE)] <- paste("Group", h_groups, sep = "_")
+  h_groups <- h_groups + 1
+  
+  if(is.infinite(min(as.numeric(conf_val_sort$group), na.rm = TRUE))) {break()}
+  
+}
+
+conf_val_sort$group <- str_remove(conf_val_sort$group, "Group_") %>% as.numeric
+
+
+# one matrix with the group, the belonging value and how many different values are available in that group
+conf_groups <- matrix(nrow = max(conf_val_sort$group), ncol = 3) %>% data.frame()
+colnames(conf_groups) <- c("group", "how_often", "round")
+
+for(i_groups in 1:max(conf_val_sort$group)) {
+  conf_groups$group[i_groups] <- i_groups
+  conf_groups$how_often[i_groups] <- sum(conf_val_sort$group == i_groups)
+  conf_groups$round[i_groups] <- mean(conf_val_sort$value_round[conf_val_sort$group == i_groups])
+}
+
+
+# group the confounding sets by their value
+
+confounding_varSets_groups <- vector(mode = "list", length = max(conf_val_sort$group)) # create list as long as number groups
+names(confounding_varSets_groups) <- conf_groups$round # name the lists as the rounded value they belong to
+
+for(i_confpaths in seq_along(confounding_varSets_values)) {
+  X <- round(confounding_varSets_values[[i_confpaths]][[2]], 3) %>% as.character()
+  if(length(confounding_varSets_groups[[X]]) == 0) { # if this value does not have a list yet, create one
+    confounding_varSets_groups[[X]] <- list()
+  }
+  confounding_varSets_groups[[X]][[length(confounding_varSets_groups[[X]]) + 1]] <- confounding_varSets_values[[i_confpaths]]
+
+}
+
+
+# sample out of these variable sets
+
+set.seed(8)
+
+conf_subset <- lapply(names(confounding_varSets_groups), function(x) {
+  X <- confounding_varSets_groups[[x]]
+  X_length <- length(X)
+  Y <- sample(c(1:X_length), 1, replace = FALSE)
+  Out1 <- X[[Y]]
+  
+  h_round <- 1
+  
+  # add second set of that group with control for not exact same confounding value
+  repeat{
+    found <- FALSE
+    
+    Y <- sample(c(1:X_length), 1, replace = FALSE)
+    
+    if(X[[Y]][[2]] != Out1[[2]]) {
+      Out2 <- X[[Y]]
+      found <- TRUE
+    }
+      
+    if(found == TRUE) {break}
+    if(h_round >= conf_groups$how_often[conf_groups$round == x]) { # check if there are other possibilities
+      Out2 <- X[[Y]]
+      break()
+    }
+    
+    h_round <- h_round + 1
+    
+  }
+  
+  # add third set of that group with control for not exact same confounding value
+    repeat{
+      found <- FALSE
+      
+      Y <- sample(c(1:X_length), 1, replace = FALSE)
+      
+      if(X[[Y]][[2]] != Out1[[2]] & X[[Y]][[2]] != Out2[[2]]) {
+        Output <- list(Out1, Out2, X[[Y]])
+        found <- TRUE
+      }
+      
+      if(found == TRUE) {break}
+      if(h_round >= conf_groups$how_often[conf_groups$round == x]) { # check if there are other possibilities
+        Output <- list(Out1, Out2, X[[Y]])
+        break()
+      }
+      
+      h_round <- h_round + 1
+      
+    }
+
+  Output
+}) 
+
+names(conf_subset) <- conf_groups$round # name the lists as the rounded value they belong to
+
+
+# get a list with the variable sets
+
+list_conf_anal_VarSets <- sapply(conf_subset, function(x){
+  X <- x
+  h_inner <- lapply(X, function(z){
+    varSet <- z[[1]]
+    varSet
+  })
+    
+  h_inner
+})
+
+save(list_conf_anal_VarSets, file = "list_conf_anal_VarSets.RData")
+
+
+
+# get a list with the belonging confounding values
+
+list_conf_anal_values <- sapply(conf_subset, function(x){
+  X <- x
+  h_inner <- lapply(X, function(z){
+    value <- z[[2]]
+    
+    value
+  })
+    
+  h_inner
+})
+
+save(list_conf_anal_values, file = "list_conf_anal_values.RData")
