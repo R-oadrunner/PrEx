@@ -1,0 +1,553 @@
+# the main analysis where the sets of variables and the sample size are varied and the regression methods are compared
+
+packs_needed <- c("dagitty", "dplyr", "plyr", "future.apply", "parallel", "ggplot2", "rlist")
+for (p in packs_needed)
+  if(!require(p, character.only = TRUE)) install.packages(p)
+  library(p, character.only = TRUE)
+
+
+rm(p)
+rm(packs_needed)
+
+
+# set information for the following analysis
+
+N_sample <- 3000 # set sample size
+
+h_rep_test <- 1000 # how often should the same N with same set of variables be tested on a different sample
+#h_rep_pred.error <- 30 # how often should a prediction error be calculated for the same models
+
+N_pred.error <- 10000 # how large should the sample be which is used to calculate the prediction error
+
+# set number loops in cross validation
+outloop <- 10
+inloop <- 10
+
+# for number of variables in the model; how often to sample for one number
+h_repsamp <- 5
+
+# for sample size start at 30 multiply this (or next previous value) by 1.2
+s <- c(30)
+repeat {
+  x <- s[length(s)] * 1.2
+  s <- cbind(s, x)
+  if(x*1.2 > 3000) {break}
+}
+s <- round(s)
+sample_sizes <- s # which N to be tested
+rm(s)
+
+h_rep_test_sampsize <- 10 # how often every sample size is tested
+sample_sizes_interaction <- sample_sizes # N sequence for interaction with number of variables
+
+
+z_stand <- function(X = NULL) {
+  Y <- (X-mean(X))/sd(X)
+  Y
+}
+
+data$Dementia <- z_stand(data$Dementia)
+causalgraph <- Dem_Pop
+
+
+
+# set variable sets
+
+dependent_variable <- "Dementia"
+
+list_simple <- list(c("Hearing_impairment"))
+names(list_simple)[1:length(list_simple)] <- "simple"
+
+list_opt <- list(c("Hearing_impairment", "Age", "U1", "U2"))
+names(list_opt)[1:length(list_opt)] <- "optimal"
+
+list_confounders <- list(c("Hearing_impairment", "Age"),
+                         c("Hearing_impairment", "U1"),
+                         c("Hearing_impairment", "U2"),
+                         c("Hearing_impairment", "Age", "U1"),
+                         c("Hearing_impairment", "Age", "U2"),
+                         c("Hearing_impairment", "U1", "U2"),
+                         c("Hearing_impairment", "Age", "U1", "U2"))
+names(list_confounders)[1:length(list_confounders)] <- "confounders"
+
+list_mediators <- list(c("Hearing_impairment", "Age", "U1", "U2", "Cognitive_load", "Neurodegeneration", "Speech_hearing"),
+                       c("Hearing_impairment", "Age", "U1", "U2", "Cognitive_reserve", "Neurodegeneration", "Social_engagement"),
+                       c("Hearing_impairment", "Age", "U1", "U2", "Neurodegeneration"),
+                       c("Hearing_impairment", "Age", "U1", "U2", "Cognitive_load", "Speech_hearing"),
+                       c("Hearing_impairment", "Age", "U1", "U2", "Cognitive_load"),
+                       c("Hearing_impairment", "Age", "U1", "U2", "Cognitive_reserve"),
+                       c("Hearing_impairment", "Age", "U1", "U2", "Cognitive_load", "Cognitive_reserve"),
+                       c("Hearing_impairment", "Age", "U1", "U2", "Social_engagement"),
+                       c("Hearing_impairment", "Age", "U1", "U2", "Speech_hearing"),
+                       c("Hearing_impairment", "Age", "U1", "U2", "Social_engagement", "Speech_hearing"))
+names(list_mediators)[1:length(list_mediators)] <- "mediators"
+
+list_collider <- list(c("Hearing_impairment", "Age", "U1", "U2", "Selection_studies"))
+names(list_collider)[1:length(list_collider)] <- "collider"
+
+list_independents <- list(c("Hearing_impairment", "Age", "U1", "U2", "Handedness"),
+                          c("Hearing_impairment", "Age", "U1", "U2", "Liking_yellow"))
+names(list_independents)[1:length(list_independents)] <- "independents"
+
+list_IV_sets <- c(list_opt, list_independents, list_mediators, list_collider, list_simple, list_confounders)
+IV_plots <- c(list_simple, list_opt, list(list_collider[[3]]), list_confounders)
+names(IV_plots)[3] <- "collider"
+
+IV_optimal <- c("Hearing_impairment", "Age", "U1", "U2")
+
+# prepare a set of variables not being the parents of dementia (included anyway) or on any causal way between dementia and hearing impairment but which are causally related to dementia
+Dem_ancestors <- ancestors(Dem_Pop, dependent_variable)
+Dem_parents <- parents(Dem_Pop, dependent_variable)
+
+h_DemCP <- paths(Dem_Pop, from = "Hearing_impairment", to = "Dementia", Z = list(), limit = 100, directed = TRUE)$paths
+Dem_causal_paths <- c()
+
+for(i_causpaths in 1:length(h_DemCP)) {
+  Dem_causal_paths <- c(Dem_causal_paths, strsplit(h_DemCP[i_causpaths], split = " -> ", fixed = TRUE)[[1]])
+}
+
+`%notin%` <- Negate(`%in%`) # to get variables NOT included in mediation (causal paths)
+Dem_caus_not_med <- Dem_ancestors[Dem_ancestors %notin% Dem_causal_paths & Dem_ancestors %notin% Dem_parents]
+
+
+set.seed(32)
+
+list_number_variables <- list()
+
+
+for(i_numsamp in 1:length(Dem_caus_not_med)) {
+  h_set <- 1
+  done <- FALSE
+  repeat {
+    X <- c("Hearing_impairment", "Age", "U1", "U2", sample(Dem_caus_not_med, i_numsamp, replace = FALSE))
+    save <- TRUE
+    if(length(list.search(list_number_variables, expr = (sum(X %in% .) == length(X) & length(.) == length(X)))) != 0) {
+      save <- FALSE
+    }
+    if(save == TRUE) {
+      list_number_variables[[h_set + ((i_numsamp-1)*h_repsamp)]] <- X
+      rm(X)
+      names(list_number_variables)[h_set + ((i_numsamp-1)*h_repsamp)] <- i_numsamp #paste(i_numsamp, i_repsamp, sep = "_")
+      h_set <- h_set + 1
+      if(h_set > h_repsamp | i_numsamp == length(Dem_caus_not_med)) {
+        done <- TRUE
+      }
+    }
+    if(done == TRUE) {break}
+  }
+}
+
+list_number_variables <- c(list(IV_optimal), list_number_variables)
+names(list_number_variables)[1] <- "0"
+
+lists_analysis <- list(list_IV_sets, list_number_variables) # , list_conf_anal_VarSets
+names(lists_analysis) <- c("list_IV_sets", "list_number_variables")
+
+
+
+# function to skip dagitty part in method_comparison cause it often does not work in future_lapply
+
+dag_prep <- function(independent_variables = NULL, causalgraph = NULL, data = NULL, h_rep_test = NULL) {
+  
+  
+  data_set <- data
+
+  # add ID to data_set
+  data_set <- cbind(c(1:nrow(data_set)), data_set) # add an ID column
+  colnames(data_set)[1] <- "ID"
+  
+  # set set.seed vectors for repetition possibility
+  seed_rep_test <- sample(c(1:500000), h_rep_test, replace = FALSE, set.seed(32))
+
+  # create a list with all parents of the independent variables to be added as a valid adjustment set to calculate true causal effects from population
+  for(i_causIV in 1:length(independent_variables)) {
+    if(i_causIV == 1) {
+      parents_IV <- list()
+      all_included <- list()
+    }
+    
+    # look for mediators in the set
+    h_DemCP <- paths(Dem_Pop, from = independent_variables[i_causIV], to = dependent_variable, Z = list(), limit = 100, directed = TRUE)$paths
+    Dem_causal_paths <- c()
+  
+    if(length(h_DemCP != 0)) {
+      for(i_causpaths in 1:length(h_DemCP)) {
+        Dem_causal_paths <- c(Dem_causal_paths, strsplit(h_DemCP[i_causpaths], split = " -> ", fixed = TRUE)[[1]])
+      }
+    }
+      
+    
+    Dem_causal_paths <- Dem_causal_paths[-which(Dem_causal_paths == independent_variables[i_causIV])]
+    Dem_causal_paths <- Dem_causal_paths[-which(Dem_causal_paths == dependent_variable)]
+    
+    mediators <- independent_variables[independent_variables %in% Dem_causal_paths]
+    all_included[[i_causIV]] <- mediators
+    
+    
+    if(length(parents(causalgraph, independent_variables[i_causIV])) != 0) {
+      parents_IV[[i_causIV]] <- parents(causalgraph, independent_variables[i_causIV]) # add parents in the list if they exist
+      all_included[[i_causIV]] <- c(all_included[[i_causIV]], parents(causalgraph, independent_variables[i_causIV]))
+    } else {#stop
+      parents_IV[[i_causIV]] <- NA # if no parents exist, add NA
+    }
+    if(length(mediators) == 0 & length(parents_IV[[i_causIV]]) == 0) {
+      all_included[[i_causIV]] <- NA
+    }
+    names(parents_IV)[i_causIV] <- independent_variables[i_causIV] # name this list row as the independent variable it belongs to
+    names(all_included)[i_causIV] <- independent_variables[i_causIV] # name this list row as the independent variable it belongs to
+    
+    rm(mediators)
+  } # end loop i_causIV
+  
+  rm(i_causIV)
+  
+  # calculate true causal influence for each independent variable
+  true_causals <- data.frame(matrix(ncol = 1, nrow = length(independent_variables)))
+  colnames(true_causals) <- "value"
+  rownames(true_causals) <- independent_variables
+  
+  for(i_causIV in 1:length(independent_variables)) {
+    
+    data_true_causals <- data.frame(data_set[,colnames(data_set) == dependent_variable], data_set[,colnames(data_set) == independent_variables[i_causIV]])
+    
+    if(length(all_included[[i_causIV]]) != 0) {
+      for(i_indvar in 1: length(all_included[[i_causIV]])) {
+        data_true_causals <- cbind(data_true_causals, data_set[,colnames(data_set) == all_included[[i_causIV]][i_indvar]])
+      }
+    }
+    
+    colnames(data_true_causals) <- c("dependent_variable", independent_variables[i_causIV], all_included[[i_causIV]])
+    
+    
+    lm_opt <- lm(dependent_variable ~ ., data = data_true_causals)
+    
+    true_causals[independent_variables[i_causIV],] <- lm_opt[["coefficients"]][[independent_variables[i_causIV]]] # true causal effect
+
+  } # end loop i_causIV
+  
+  true_causals
+}
+
+
+# analysis for normal set of variables
+
+list_used <- lists_analysis[[1]]
+
+try(rm(list_true_causals, true_causals))
+
+# some preparation because dagitty is not (always) working inside the future_apply
+
+list_true_causals <- lapply(list_used, function(x) {
+  independent_variables <- x
+  dag_prep(causalgraph = causalgraph, independent_variables = independent_variables, data = data, h_rep_test = h_rep_test)
+})
+
+detectCores()
+plan(multiprocess)
+
+options(future.globals.maxSize = 30000000000)
+res_IVsets <- future_lapply(seq_along(list_used), function(x) {
+  
+  independent_variables <- list_used[[x]]
+  true_causals <- list_true_causals[[x]]
+  
+  results_methods <- Method_comparison(N_sample = N_sample, data  = data, causalgraph = Dem_Pop, h_rep_test = h_rep_test, N_pred.error = N_pred.error, outloop = outloop, inloop = inloop, dependent_variable = dependent_variable, independent_variables = independent_variables, true_causals = true_causals)
+  
+  bias_and_PE <- c(paste(names(list_used)[x], x, sep = "_"), list(independent_variables), c(results_methods[["Bias_deviation_stand"]]), c(results_methods[["Prediction_error"]]))
+  names(bias_and_PE) <- c("group", "IV_set", "bias_lm_normal", "bias_lm_cv", "bias_ridge", "PE_lm_normal", "PE_lm_cv", "PE_ridge")
+  
+  
+  regr_coefs_stand <- colMeans(results_methods[["Regr_coefs_stand"]])
+  
+  bias_variance <- results_methods[["bias_variance"]]
+  
+  output <- list(bias_and_PE, regr_coefs_stand, bias_variance)
+  
+})
+
+
+IVsets_bias_and_PE <- list()
+IVsets_bias_variance <- list()
+IVsets_regr_coefs_stand <- matrix(nrow = length(res_IVsets), ncol = 5) %>% data.frame()
+colnames(IVsets_regr_coefs_stand) <- c("group", "lm_normal", "lm_cv", "ridge", "true_value")
+
+for(i_split in seq_along(res_IVsets)) {
+  IVsets_bias_and_PE[[i_split]] <- res_IVsets[[i_split]][[1]]
+  IVsets_bias_variance[[i_split]] <- res_IVsets[[i_split]][[3]]
+  IVsets_regr_coefs_stand[i_split,2:5] <- res_IVsets[[i_split]][[2]]
+}
+
+names(IVsets_bias_and_PE) <- names(IVsets_bias_variance) <- IVsets_regr_coefs_stand$group <- names(list_used)
+
+
+save(IVsets_bias_and_PE, file = "IVsets_bias_and_PE.RData")
+save(IVsets_regr_coefs_stand, file = "IVsets_regr_coefs_stand.RData")
+save(IVsets_bias_variance, file = "IVsets_bias_variance.RData")
+
+
+# vector save for number of variables
+
+# split into subset for analysis because it otherwise needs too much memory when it's working in parallel processes
+list_numbVars_1 <- list_number_variables[c(1:20)]
+list_numbVars_2 <- list_number_variables[c(21:40)]
+list_numbVars_3 <- list_number_variables[c(41:55)]
+list_numbVars_4 <- list_number_variables[c(56:67)]
+
+list_list_numbVars <- list(list_numbVars_1, list_numbVars_2, list_numbVars_3, list_numbVars_4)
+
+for(i_numbvarsset in 1:4) {
+  
+  list_used <- list_list_numbVars[[i_numbvarsset]]
+  
+  try(rm(list_true_causals, true_causals, res_numbVars, numbVars_bias, numbVars_PE, numbVars_bias_and_PE))
+  
+  # some preparation because dagitty is not (always) working inside the future_apply
+  
+  list_true_causals <- lapply(list_used, function(x) {
+    independent_variables <- x
+    dag_prep(causalgraph = causalgraph, independent_variables = independent_variables, data = data, h_rep_test = h_rep_test_sampsize)
+  })
+  
+  detectCores()
+  plan(multiprocess)
+  
+  options(future.globals.maxSize = 30000000000)
+  res_numbVars <- future_lapply(seq_along(list_used), function(x) {
+    
+    independent_variables <- list_used[[x]]
+    true_causals <- list_true_causals[[x]]
+    
+    results_methods <- Method_comparison(N_sample = N_sample, data  = data, causalgraph = causalgraph, h_rep_test = h_rep_test_sampsize, N_pred.error = N_pred.error, outloop = outloop, inloop = inloop, dependent_variable = dependent_variable, independent_variables = independent_variables, true_causals = true_causals)
+    
+    bias_and_PE <- c(names(list_used)[x], c(results_methods[["Bias_deviation_stand"]]), c(results_methods[["Prediction_error"]]))
+    names(bias_and_PE) <- c("group", "bias_lm_normal", "bias_lm_cv", "bias_ridge", "PE_lm_normal", "PE_lm_cv", "PE_ridge")
+    
+    bias_variance <- results_methods[["bias_variance"]]
+    
+    output <- list(bias_and_PE, bias_variance)
+    
+    output
+    
+  })
+  
+  numbVars_bias_and_PE <- list()
+  numbVars_bv <- list()
+  
+  for(i_split in seq_along(res_numbVars)) {
+    numbVars_bias_and_PE[[i_split]] <- res_numbVars[[i_split]][[1]]
+    numbVars_bv[[i_split]] <- res_numbVars[[i_split]][[2]]
+  }
+  
+  names(numbVars_bias_and_PE) <- names(numbVars_bv) <- names(list_used)
+  
+  mean_bias_numbVars <- matrix(nrow = length(numbVars_bias_and_PE)*h_rep_test_sampsize, ncol = 4) %>% data.frame()
+  colnames(mean_bias_numbVars) <- c("group", "lm_normal", "lm_cv", "ridge")
+  mean_PE_numbVars <- mean_bias_numbVars
+  
+  # save the output separately for bias and prediction error
+  h_entry <- 1
+  for(i_IVopt in seq_along(numbVars_bias_and_PE)) { # for different sample sizes
+    for(i_rep in 1:h_rep_test_sampsize) { # for repetitions of the same sample size
+      mean_bias_numbVars[h_entry,1] <- numbVars_bias_and_PE[[i_IVopt]][1]
+      mean_bias_numbVars[h_entry,2:4] <- data.frame(numbVars_bias_and_PE[[i_IVopt]][2:4])[i_rep,]
+      mean_PE_numbVars[h_entry,1] <- numbVars_bias_and_PE[[i_IVopt]][1]
+      mean_PE_numbVars[h_entry,2:4] <- data.frame(numbVars_bias_and_PE[[i_IVopt]][5:7])[i_rep,]
+      h_entry <- h_entry + 1       
+    }
+  }
+  
+  assign(paste("numbVars_bias_", i_numbvarsset, sep = ""), paste("save_bias_numbVars_", i_numbvarsset, ".RData", sep = ""))
+  assign(paste("numbVars_PE_", i_numbvarsset, sep = ""), paste("save_bias_numbVars_", i_numbvarsset, ".RData", sep = ""))
+  assign(paste("numbVars_bv_", i_numbvarsset, sep = ""), numbVars_bv)
+
+}
+
+numbVars_bias <- rbind(numbVars_bias_1, numbVars_bias_2, numbVars_bias_3, numbVars_bias_4)
+numbVars_PE <- rbind(numbVars_PE_1, numbVars_PE_2, numbVars_PE_3, numbVars_PE_4)
+numbVars_EPE <- c(numbVars_bv_1, numbVars_bv_2, numbVars_bv_3, numbVars_bv_4)
+
+save(numbVars_bias, file = "numbVars_bias.RData")
+save(numbVars_PE, file = "numbVars_PE.RData")
+save(numbVars_EPE, file = "numbVars_EPE.RData")
+
+
+
+# vector save for sample size variations
+
+try(rm(mean_bias, mean_PE, sampSize_bias, sampSize_PE))
+detectCores()
+
+independent_variables <- IV_optimal
+true_causals <- dag_prep(causalgraph = causalgraph, independent_variables = independent_variables, data = data, h_rep_test = h_rep_test_sampsize)
+
+
+
+plan(multiprocess)
+
+
+options(future.globals.maxSize = 30000000000)
+res_sampSize <- future_lapply(sample_sizes, function(x) {
+  sampsize <- x
+  independent_variables <- IV_optimal
+
+  results_methods <- Method_comparison(N_sample = sampsize, data  = data, causalgraph = Dem_Pop, h_rep_test = h_rep_test_sampsize, N_pred.error = N_pred.error, outloop = outloop, inloop = inloop, dependent_variable = dependent_variable, independent_variables = independent_variables, true_causals = true_causals)
+  
+  bias_and_PE <- c(x, c(results_methods[["Bias_deviation_stand"]]), c(results_methods[["Prediction_error"]][,1:3]))
+  names(bias_and_PE) <- c("N", "bias_lm_normal", "bias_lm_cv", "bias_ridge", "PE_lm_normal", "PE_lm_cv", "PE_ridge")
+  
+  bias_variance <- results_methods[["bias_variance"]]
+  
+  output <- list(bias_and_PE, bias_variance)
+  
+  output
+  
+})
+
+save(res_sampSize, file = "res_sampSize.RData")
+
+sampSize_bias_and_PE <- list()
+sampSize_EPE <- list()
+
+for(i_split in seq_along(res_sampSize)) {
+  sampSize_bias_and_PE[[i_split]] <- res_sampSize[[i_split]][[1]]
+  sampSize_EPE[[i_split]] <- res_sampSize[[i_split]][[2]]
+}
+
+names(sampSize_bias_and_PE) <- names(sampSize_EPE) <- sample_sizes
+
+sampSize_bias <- matrix(nrow = length(sampSize_bias_and_PE)*h_rep_test_sampsize, ncol = 4) %>% data.frame()
+colnames(sampSize_bias) <- c("group", "lm_normal", "lm_cv", "ridge")
+sampSize_PE <- sampSize_bias
+
+
+# save the output separately for bias and prediction error
+h_entry <- 1
+for(i_IVopt in seq_along(sampSize_bias_and_PE)) { # for different sample sizes
+  for(i_rep in 1:h_rep_test_sampsize) { # for repetitions of the same sample size
+    sampSize_bias[h_entry,1] <- sampSize_bias_and_PE[[i_IVopt]][1]
+    sampSize_bias[h_entry,2:4] <- data.frame(sampSize_bias_and_PE[[i_IVopt]][2:4])[i_rep,]
+    sampSize_PE[h_entry,1] <- sampSize_bias_and_PE[[i_IVopt]][1]
+    sampSize_PE[h_entry,2:4] <- data.frame(sampSize_bias_and_PE[[i_IVopt]][5:7])[i_rep,]
+    h_entry <- h_entry + 1       
+  }
+}
+
+save(sampSize_PE, file = "sampSize_PE.RData")
+save(sampSize_bias, file = "sampSize_bias.RData")
+save(sampSize_EPE, file = "sampSize_EPE.RData")
+
+
+
+# strength of uncontrolled confounding ~ bias // PE
+
+list_conf_HI <- lapply(list_conf_anal_VarSets, function(x) {
+  c("Hearing_impairment", x)
+})
+
+h_rep_test_used <- h_rep_test_sampsize
+
+# split into multiple set for analysis because it otherwise needs too much memory in parallel processes
+list_conf_1 <- list_conf_HI[c(1:20)]
+list_conf_1_val <- list_conf_anal_values[1:20]
+
+list_conf_2 <- list_conf_HI[c(21:40)]
+list_conf_2_val <- list_conf_anal_values[21:40]
+
+list_conf_3 <- list_conf_HI[c(41:60)]
+list_conf_3_val <- list_conf_anal_values[41:60]
+
+list_conf_4 <- list_conf_HI[c(61:80)]
+list_conf_4_val <- list_conf_anal_values[61:80]
+
+list_conf_5 <- list_conf_HI[c(81:100)]
+list_conf_5_val <- list_conf_anal_values[81:100]
+
+list_conf_6 <- list_conf_HI[c(101:120)]
+list_conf_6_val <- list_conf_anal_values[101:120]
+
+list_conf_7 <- list_conf_HI[c(121:144)]
+list_conf_7_val <- list_conf_anal_values[121:144]
+
+
+list_list_conf <- list(list_conf_1, list_conf_2, list_conf_3, list_conf_4, list_conf_5, list_conf_6, list_conf_7)
+list_list_conf_val <- list(list_conf_1_val, list_conf_2_val, list_conf_3_val, list_conf_4_val, list_conf_5_val, list_conf_6_val, list_conf_7_val)
+
+for(i_confset in 1:7) {
+
+  try(rm(list_true_causals, true_causals, mean_bias_conf, mean_PE_conf, list_used, res_conf, conf_bias_and_PE, conf_bv))
+    
+    
+  list_used <- list_list_conf[[i_confset]] # list of confounding variable sets
+  names(list_used) <- c(list_list_conf_val[[i_confset]]) # the belonging strength of uncontrolled confounding for each set as its name in the list
+  
+  # some preparation because dagitty is not (always) working inside the future_lapply
+  
+  list_true_causals <- lapply(list_used, function(x) {
+    independent_variables <- x
+    dag_prep(causalgraph = causalgraph, independent_variables = independent_variables, data = data, h_rep_test = h_rep_test_used)
+  })
+  
+  save(list_true_causals, file = paste("conf_list_true_causals", i_confset, ".RData"))
+  
+  detectCores()
+  plan(multiprocess)
+  
+  options(future.globals.maxSize = 30000000000)
+  res_conf <- future_lapply(seq_along(list_used), function(x) {
+    
+    independent_variables <- list_used[[x]]
+    true_causals <- list_true_causals[[x]]
+    
+    results_methods <- Method_comparison(N_sample = N_sample, data  = data, causalgraph = causalgraph, h_rep_test = h_rep_test_used, N_pred.error = N_pred.error, outloop = outloop, inloop = inloop, dependent_variable = dependent_variable, independent_variables = independent_variables, true_causals = true_causals)
+   
+    bias_and_PE <- c(names(list_used)[x], c(results_methods[["Bias_deviation_stand"]]), c(results_methods[["Prediction_error"]][,1:3]))
+    names(bias_and_PE) <- c("group", "bias_lm_normal", "bias_lm_cv", "bias_ridge", "PE_lm_normal", "PE_lm_cv", "PE_ridge")
+    
+    bias_variance <- results_methods[["bias_variance"]]
+    
+    output <- list(bias_and_PE, bias_variance)
+    
+    output
+    
+  })
+  
+  conf_bias_and_PE <- list()
+  conf_bv <- list()
+  
+  for(i_split in seq_along(res_conf)) {
+    conf_bias_and_PE[[i_split]] <- res_conf[[i_split]][[1]]
+    conf_bv[[i_split]] <- res_conf[[i_split]][[2]]
+  }
+  
+  names(conf_bias_and_PE) <- names(conf_bv) <- names(list_used)
+  
+  mean_bias_conf <- matrix(nrow = length(conf_bias_and_PE)*h_rep_test_sampsize, ncol = 4) %>% data.frame()
+  colnames(mean_bias_conf) <- c("group", "lm_normal", "lm_cv", "ridge")
+  mean_PE_conf <- mean_bias_conf
+  
+  # save the output separately for bias and prediction error
+  h_entry <- 1
+  for(i_IVopt in seq_along(conf_bias_and_PE)) { # for different sample sizes
+    for(i_rep in 1:h_rep_test_used) { # for repetitions of the same sample size
+      mean_bias_conf[h_entry,1] <- conf_bias_and_PE[[i_IVopt]][1]
+      mean_bias_conf[h_entry,2:4] <- data.frame(conf_bias_and_PE[[i_IVopt]][2:4])[i_rep,]
+      mean_PE_conf[h_entry,1] <- conf_bias_and_PE[[i_IVopt]][1]
+      mean_PE_conf[h_entry,2:4] <- data.frame(conf_bias_and_PE[[i_IVopt]][5:7])[i_rep,]
+      h_entry <- h_entry + 1       
+    }
+  }
+  
+  
+  assign(paste("conf_bias_", i_confset, sep = ""), mean_bias_conf)
+  assign(paste("conf_PE_", i_confset, sep = ""), mean_PE_conf)
+  assign(paste("conf_bv_", i_confset, sep = ""), conf_bv)
+  
+}
+
+conf_bias <- rbind(conf_bias_1, conf_bias_2, conf_bias_3, conf_bias_4, conf_bias_5, conf_bias_6, conf_bias_7)
+conf_PE <- rbind(conf_PE_1, conf_PE_2, conf_PE_3, conf_PE_4, conf_PE_5, conf_PE_6, conf_PE_7)
+conf_EPE <- c(conf_bv_1, conf_bv_2, conf_bv_3, conf_bv_4, conf_bv_5, conf_bv_6, conf_bv_7)
+
+save(conf_bias, file = "conf_bias.RData")
+save(conf_PE, file = "conf_PE.RData")
+save(conf_EPE, file = "conf_EPE.RData")
